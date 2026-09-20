@@ -5,6 +5,7 @@ import { chooseShot, LEVELS } from '../public/js/bot.js';
 import { predictPath, firstOnLine } from '../public/js/input.js';
 import * as C from '../public/js/controls.js';
 import { rng } from '../public/js/rng.js';
+import { readFileSync } from 'node:fs';
 
 let failures = 0;
 const ok = (name, cond, detail = '') => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? ' (' + detail + ')' : ''}`); if (!cond) failures++; };
@@ -295,6 +296,18 @@ const board = () => [
   }
   ok('no marble ever rests outside the patch', offscreen === 0, `${shots} shots, ${offscreen} escaped`);
   ok('and marbles are still being knocked clear of the ring', knocked > shots * 0.4, `${knocked} in ${shots} shots`);
+}
+
+// ---------- the build stamp must not drift ----------
+{
+  // The page compares the build baked into index.html against version.json to tell a stale
+  // cached copy from a real bug. If those two ever disagree, every visitor is told to update
+  // forever -- so this fails the build instead.
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const ver = JSON.parse(readFileSync(new URL('../public/version.json', import.meta.url), 'utf8'));
+  const inPage = (html.match(/KANCHE_BUILD = '([^']+)'/) || [])[1];
+  ok('index.html declares a build', !!inPage, inPage);
+  ok('version.json matches it', inPage === ver.build, `page ${inPage} vs version.json ${ver.build}`);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll Kanche tests passed');

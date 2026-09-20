@@ -175,6 +175,9 @@ body{
   background:var(--chalk);color:#2a1b10;border-radius:13px;padding:12px 14px;font-size:13px;
   display:flex;gap:10px;align-items:center;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .a2hs button{margin-left:auto;background:none;border:0;font-size:22px;line-height:1;cursor:pointer}
+.stale{background:var(--gold);color:#2a1b10;font-weight:600}
+.stale-go{margin-left:auto;background:#2a1b10!important;color:var(--chalk);border-radius:8px;
+  padding:7px 14px;font:700 13px inherit!important;flex:none}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
 /* On anything wider than a phone, keep the play area phone-shaped and centred. The game is

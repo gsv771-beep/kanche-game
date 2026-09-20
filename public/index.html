@@ -37,6 +37,28 @@
     bail(e.message || 'Failed to load a file', (e.filename || '') + ':' + (e.lineno || '') + ' ' + (e.error && e.error.stack ? e.error.stack : ''));
   }, true);
   addEventListener('unhandledrejection', function (e) { bail('Unhandled promise rejection', e.reason && e.reason.stack ? e.reason.stack : e.reason); });
+  // Is the copy on screen the copy that was deployed? An installed Home Screen app on iOS will
+  // happily serve a weeks-old page forever, and from the outside that is indistinguishable from
+  // "the fixes were never made". So ask the server directly, defeating every cache on the way,
+  // and if the answer disagrees with the build baked into THIS file, say so and offer a way out.
+  addEventListener('load', function () {
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v || v.build === window.KANCHE_BUILD) return;
+        var bar = document.getElementById('stale');
+        document.getElementById('stale-txt').textContent =
+          'You are on ' + window.KANCHE_BUILD + '. Version ' + v.build + ' is live.';
+        bar.hidden = false;
+        document.getElementById('stale-go').onclick = function () {
+          // Belt and braces: drop any caches we can reach, then reload on a fresh URL.
+          if (window.caches && caches.keys) caches.keys().then(function (k) { k.forEach(function (n) { caches.delete(n); }); });
+          location.replace(location.pathname + '?v=' + Date.now());
+        };
+      })
+      .catch(function () {});
+  });
+
   // If main.js never sets this flag, the module never ran at all -- the single most useful
   // thing to know, and the one thing a silent failure never tells you.
   addEventListener('load', function () {
@@ -164,6 +186,11 @@
     <p class="fine" id="jota-out"></p>
     <button class="btn-ghost" id="jota-close">Rehne do</button>
   </div>
+</div>
+
+<div id="stale" class="a2hs stale" hidden>
+  <span id="stale-txt"></span>
+  <button id="stale-go" class="stale-go">Update</button>
 </div>
 
 <div id="a2hs" class="a2hs" hidden>
