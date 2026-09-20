@@ -18,6 +18,8 @@ const store = {
   set(k, v) { try { localStorage.setItem('kanche.' + k, JSON.stringify(v)); } catch {} },
 };
 
+const START_STASH = 20;   // what both players bring to the field, every match
+let pocketBase = 0;       // marbles won across all previous matches, before this one
 let pick = { mode: 'chakri', bot: 'bunty', striker: 'goli' };
 let match = null, r = null, phase = 'idle', fromLine = false, used = new Set();
 const ctl = C.createControls();
@@ -72,13 +74,16 @@ function start() {
   const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
   r = rng(seed);
   used = new Set();
-  const carried = store.get('stash', 20);
+  // Both players start every match level. The stash used to carry over for the human only,
+  // while the bot reset to 20 -- so after a few games the counts read 27 against 20 and never
+  // went back. What you keep across matches is the pocket below, which is a separate number and
+  // does not touch the count either player plays with.
   match = newMatch({
     seed, mode: pick.mode, ante: pick.mode === 'pill' ? 3 : 4,
     players: [
-      { name: 'You', kind: 'human', striker: pick.striker, skin: 'kanch', stash: Math.max(6, carried) },
+      { name: 'You', kind: 'human', striker: pick.striker, skin: 'kanch', stash: START_STASH },
       { name: LEVELS[pick.bot].name, kind: 'bot', level: pick.bot, avatar: pick.bot,
-        striker: pick.bot === 'ustaad' ? 'dhampar' : 'goli', skin: 'lakhoti', stash: 20 },
+        striker: pick.bot === 'ustaad' ? 'dhampar' : 'goli', skin: 'lakhoti', stash: START_STASH },
     ],
   });
   phase = 'aim'; fromLine = false; play = null; botPreview = null; window.__match = match;
@@ -184,15 +189,27 @@ function over() {
   $('#over-title').textContent = won ? 'Jeet gaye!' : you.won === bot.won ? 'Barabar' : 'Haar gaye';
   $('#over-line').textContent = won ? `You walk home with ${you.won} extra goli.`
     : you.won === bot.won ? 'Nobody is richer. Again?' : `${bot.name} pockets ${bot.won}.`;
-  $('#tally').innerHTML = `<div><b>${you.stash}</b>your pocket</div><div><b>${bot.stash}</b>${bot.name}</div>`;
-  store.set('stash', Math.max(6, you.stash));
+  pocketBase = store.get('pocket', 0);
   if (won) store.set('wins', store.get('wins', 0) + 1);
+  tally();
   show('screen-over');
+}
+
+/** This match's net for each side, plus the running pocket -- the only number that carries. */
+function tally() {
+  const you = match.players[0], bot = match.players[1];
+  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
+  const pocket = pocketBase + you.won;
+  store.set('pocket', pocket);
+  $('#tally').innerHTML =
+    `<div><b>${sign(you.won)}</b>you, this match</div>` +
+    `<div><b>${sign(bot.won)}</b>${bot.name}</div>` +
+    `<div><b>${pocket}</b>your pocket, all games</div>`;
 }
 
 /* ---------------- kali jota ---------------- */
 $('#btn-jota').onclick = () => { $('#jota').hidden = false; $('#jota-out').textContent = ''; };
-$('#jota-close').onclick = () => { $('#jota').hidden = true; $('#tally').innerHTML = `<div><b>${match.players[0].stash}</b>your pocket</div><div><b>${match.players[1].stash}</b>${match.players[1].name}</div>`; };
+$('#jota-close').onclick = () => { $('#jota').hidden = true; tally(); };
 document.querySelectorAll('.jota-btns button').forEach((b) => b.onclick = () => {
   const handful = 1 + r.int(5);
   const res = kaliJota(match, 0, 1, b.dataset.call, handful);
@@ -200,7 +217,7 @@ document.querySelectorAll('.jota-btns button').forEach((b) => b.onclick = () => 
   setTimeout(() => { $('#fist').classList.remove('shake'); $('#fist').textContent = '🖐'; }, 400);
   $('#jota-out').textContent = `${res.n} in the fist — ${res.isOdd ? 'kali' : 'jota'}. ` +
     (res.right ? `You take ${res.moved}.` : `You pay ${res.moved}.`);
-  store.set('stash', Math.max(6, match.players[0].stash));
+  tally();   // the side bet moves the same net the match did, so the pocket follows
 });
 
 /* ---------------- loop ---------------- */
