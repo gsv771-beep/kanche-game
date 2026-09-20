@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node tools/serve.mjs",
     "test": "node tests/kanche.test.mjs",
-    "deploy": "wrangler pages deploy public --project-name kanche-game",
+    "deploy": "wrangler deploy",
     "deploy:rooms": "cd worker && wrangler deploy"
   }
 }

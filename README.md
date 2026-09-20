@@ -6,15 +6,19 @@ phone. No engine, no build step, no binary assets. Open `index.html` and it runs
 ```
 npm run dev     # http://localhost:8790
 npm test        # physics, rules and the bot ladder
-npm run deploy  # wrangler pages deploy public
+npm run deploy  # wrangler deploy -- uploads public/ as a static-assets Worker
 ```
 
 `public/` **is** the site. There is no build step, no bundler and no dependencies -- Cloudflare
 Pages (or any static host, or a USB stick) serves it as-is.
 
-Two Cloudflare projects, deliberately separate: **`kanche-game`** is the static page (free,
-nothing to break), **`kanche-rooms`** is the Worker for online play (paid plan, deployed from
-`worker/`). The page works completely without the Worker -- the bot is entirely local.
+Two Cloudflare projects, deliberately separate: **`kanche-game`** is the static page (a
+static-assets Worker -- free and unmetered, no build step, no server code), **`kanche-rooms`**
+is the Worker for online play (needs the paid plan, deployed from `worker/`). The page works
+completely without the Worker -- the bot runs entirely in the browser.
+
+In the dashboard, leave **Build command empty** and **Deploy command `npx wrangler deploy`**.
+There is nothing to build; a non-empty build command is the usual way this deploy fails.
 
 ---
 

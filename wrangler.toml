@@ -1,10 +1,18 @@
-# Cloudflare Pages project for the game page. public/ IS the site -- no build step, no bundler.
-# This name must match the Pages project you create in the dashboard, or `npm run deploy`
-# will push to the wrong project (or create a stray one).
+# Static-assets Worker. There is no build step and no server code: public/ is uploaded as-is
+# and served from the edge, which is why there is no `main` entry point here.
+#
+# Cloudflare's dashboard now routes new projects through Workers rather than Pages, so this is
+# the Workers shape (`[assets]`), not the Pages shape (`pages_build_output_dir`). Deploy with
+# `npx wrangler deploy`. Static assets are free and unmetered on the Workers free plan.
 name = "kanche-game"
-pages_build_output_dir = "public"
 compatibility_date = "2026-09-01"
 
-# Online play is a SEPARATE Worker with its own Durable Object binding -- see worker/wrangler.toml.
-# Keeping it separate means the game page stays a pure static deploy that costs nothing and
-# cannot be broken by a bad Worker deploy.
+[assets]
+directory = "./public"
+# Left at the default ("none"), so a missing file honestly 404s. Single-page-application mode
+# would serve index.html for every unknown path, which turns a mistyped script src into a
+# baffling MIME-type error instead of a plain 404. The game is one page at / -- it needs no
+# routing, and a room code arrives as ?room=XXXX, which is a query string, not a path.
+
+# Online play is a SEPARATE Worker -- see worker/wrangler.toml (`npm run deploy:rooms`).
+# Keeping them apart means a bad Worker deploy cannot take the game page down.
