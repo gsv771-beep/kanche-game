@@ -12,6 +12,10 @@ npm run deploy  # wrangler pages deploy public
 `public/` **is** the site. There is no build step, no bundler and no dependencies -- Cloudflare
 Pages (or any static host, or a USB stick) serves it as-is.
 
+Two Cloudflare projects, deliberately separate: **`kanche-game`** is the static page (free,
+nothing to break), **`kanche-rooms`** is the Worker for online play (paid plan, deployed from
+`worker/`). The page works completely without the Worker -- the bot is entirely local.
+
 ---
 
 ## The shot

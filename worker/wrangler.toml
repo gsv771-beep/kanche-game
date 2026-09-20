@@ -1,6 +1,7 @@
-# Reference config for the standalone Kanche worker. Deploy this from its own directory --
-# it is intentionally NOT part of the tax app's wrangler.toml or its D1 database.
-name = "kanche"
+# The rooms Worker: async and realtime play. Deployed independently of the game page, from
+# inside this directory (`npx wrangler deploy`). Needs the Workers paid plan for Durable Objects.
+# Named distinctly from the Pages project so the two can never be confused at deploy time.
+name = "kanche-rooms"
 main = "kanche-worker.js"
 compatibility_date = "2026-09-01"
 
