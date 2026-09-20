@@ -7,6 +7,13 @@
 name = "kanche-game"
 compatibility_date = "2026-09-01"
 
+# Both of these default to true and Wrangler warns on every deploy until they are stated.
+# Pinned rather than removed: workers_dev is the live URL people are given, and preview_urls
+# backs the per-branch preview deployments. Set preview_urls = false if you would rather
+# unreleased versions not each get a public URL -- it costs you branch previews.
+workers_dev = true
+preview_urls = true
+
 [assets]
 directory = "./public"
 # Left at the default ("none"), so a missing file honestly 404s. Single-page-application mode
