@@ -1,6 +1,6 @@
 // Kanche: physics, rules and the bot ladder. Run: node tests/kanche.test.mjs
 import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, FIELD, dist, powerToClear } from '../public/js/physics.js';
-import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES } from '../public/js/rules.js';
+import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES, TURN_SHOTS, shotsLeft } from '../public/js/rules.js';
 import { chooseShot, LEVELS } from '../public/js/bot.js';
 import { predictPath, firstOnLine } from '../public/js/input.js';
 import * as C from '../public/js/controls.js';
@@ -187,14 +187,37 @@ const board = () => [
   ok('the striker is put back behind the line for next time', strikerOf(m, 0).y > 0.5);
 }
 {
-  // A score buys the whole turn back.
+  // A score refunds the chance it spent -- it does not hand back the whole set. The first cut
+  // did, and a player scoring once every three shots then held the board for the entire game:
+  // measured, the opponent never took a single turn in 13 games out of 15.
   const m = newMatch({ seed: 37, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
   applyShot(m, { angle: Math.PI / 2, power: 0.05 });
   ok('down to fewer chances after a miss', m.chances === CHANCES - 1);
+  const before = m.chances;
   const t = potMarbles(m)[0]; t.x = 0; t.y = -(m.ringR - 0.02);
   const s = strikerOf(m, 0); s.x = 0; s.y = SHOOT_LINE;
   const out = applyShot(m, { angle: -Math.PI / 2, power: 0.95 });
-  ok('knocking one out refills the chances', out.summary.gained >= 1 && m.chances === CHANCES);
+  ok('a score costs nothing but does not refill the set', out.summary.gained >= 1 && m.chances === before,
+    `${before} -> ${m.chances}`);
+  ok('so a miss can never be bought back by a later score', m.chances < CHANCES);
+}
+{
+  // The hard ceiling: no run, however hot, keeps the board forever.
+  const m = newMatch({ seed: 41, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  ok('a turn is capped at a few shots', TURN_SHOTS >= 2 && TURN_SHOTS <= 6);
+  let shots = 0;
+  while (m.turn === 0 && shots < 30) {
+    // tee one up on the rim every time, so every shot scores
+    const t = potMarbles(m)[0];
+    if (!t) break;
+    t.x = 0; t.y = -(m.ringR - 0.02);
+    const st = strikerOf(m, 0); st.x = 0; st.y = SHOOT_LINE;
+    applyShot(m, { angle: -Math.PI / 2, power: 0.95 });
+    shots++;
+  }
+  ok('even scoring every single shot, the turn ends', shots <= TURN_SHOTS, `${shots} shots taken`);
+  ok('and the pips count shots left in the turn, not raw chances',
+    shotsLeft(m) <= TURN_SHOTS && shotsLeft(m) <= CHANCES);
 }
 
 // ---------- the bot ----------
@@ -264,9 +287,11 @@ const board = () => [
 
   const n = newMatch({ seed: 17, mode: 'pill', ante: 3, players: [{ name: 'A' }, { name: 'B' }] });
   applyShot(n, away);
+  const was = n.chances;
   const s = strikerOf(n, 0); s.x = 0; s.y = 0.16;
   applyShot(n, { angle: -Math.PI / 2, power: 0.30 });
-  ok('landing in the pill arms you and refills the chances', n.players[0].armed && n.chances === CHANCES);
+  ok('landing in the pill arms you and costs you nothing', n.players[0].armed && n.chances === was,
+    `${was} -> ${n.chances}`);
 }
 
 // ---------- nothing may come to rest where the player cannot see it ----------

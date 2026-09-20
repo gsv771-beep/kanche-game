@@ -1,5 +1,5 @@
 // Wiring. Owns the screens, the turn loop and the playback of a settled shot.
-import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, CHANCES } from './rules.js';
+import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, CHANCES, TURN_SHOTS, shotsLeft } from './rules.js';
 import { chooseShot, thinkTime, LEVELS } from './bot.js';
 import * as R from './render.js';
 import { attachInput, predictPath, firstOnLine } from './input.js';
@@ -100,7 +100,9 @@ function start() {
   if (current(match).kind === 'bot') botTurn();
 }
 
-const assist = () => (store.get('wins', 0) >= 3 ? 0.55 : 1);
+// The predicted path is a teaching aid, not a permanent crutch: it shortens as you win, so
+// judging the line becomes your job rather than the game's.
+const assist = () => { const w = store.get('wins', 0); return w >= 8 ? 0.28 : w >= 4 ? 0.5 : w >= 2 ? 0.75 : 1; };
 
 /** Point the striker at something. The opening aim used to be straight up while the striker
  *  starts off-centre, so tapping SHOOT without aiming missed the pile entirely. */
@@ -282,10 +284,9 @@ function hud() {
   $('#pot').textContent = match.mode === 'pill'
     ? match.marbles.filter((m) => !m.striker).length : match.pot;
   const ch = $('#chances');
-  ch.innerHTML = match.mode === 'chakri'
-    ? Array.from({ length: CHANCES }, (_, i) => `<i class="${i < match.chances ? '' : 'spent'}"></i>`).join('')
-    : '';
-  ch.title = `${match.chances} of ${CHANCES} chances left this turn`;
+  const left = shotsLeft(match);
+  ch.innerHTML = Array.from({ length: CHANCES }, (_, i) => `<i class="${i < left ? '' : 'spent'}"></i>`).join('');
+  ch.title = `${left} shot${left === 1 ? '' : 's'} left this turn`;
 }
 let bubbleTimer = null;
 function bubble(text) {

@@ -88,7 +88,14 @@ striker. Ustaad Pappu shoots one.
 
 **Chakri.** Everyone antes 4. The pot goes in the ring, you shoot from the line. Knock a marble
 fully outside the line and you keep it *and shoot again* — that continuation rule is the whole
-tension, the same as a break in pool. Your striker stays where it lies, which is usually inside
+tension, the same as a break in pool.
+
+A turn is bounded twice over, and it needs both. Every shot spends a chance and a score refunds
+the one it spent, capped at the set — so a run continues only while it keeps scoring. On top of
+that a turn is at most **four shots** whatever happens. The first cut had neither: any score
+refilled the whole set, so scoring once every three shots held the board indefinitely. Measured
+bot against bot, the stronger player took 95% of all shots and the opponent *never took a single
+turn* in 13 games out of 15. With both limits in place it is 58%, and nobody is ever shut out. Your striker stays where it lies, which is usually inside
 the ring, where the next shot is easy but a miss is fatal. So you may instead **take the line**
 and walk back: the single best decision in the game.
 

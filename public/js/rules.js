@@ -11,11 +11,22 @@ export const MODES = {
 };
 const CHOT_BONUS = 1;   // hitting an armed chot wins their marble plus this much from their stash
 
-// Chances. In the street game a turn is not one shot: miss and your striker stays exactly where
-// it stopped, and you shoot again from there. That is what makes position matter -- a miss
-// leaves you somewhere, and where it leaves you is the next problem. A turn ends when the
-// chances run out, not on the first mistake.
+// Chances. A turn is not one shot: miss and your striker stays exactly where it stopped, and
+// you shoot again from there. What makes position matter is that a miss leaves you somewhere,
+// and where it leaves you is the next problem.
+//
+// EVERY shot spends a chance and a score refunds one, capped at the set. So a player who keeps
+// scoring keeps the board -- earned, shot by shot -- while anyone missing runs out fast. The
+// first cut simply refilled the set on any score, which sounds similar and is not: scoring once
+// in three shots then held the board forever. Measured, a strong player took 95% of the shots
+// and the opponent never got a turn at all in 13 games out of 15.
 export const CHANCES = 3;
+
+// A hard ceiling on a turn, whatever you are doing with it. Chances alone do not bound a turn:
+// a scoring shot is net-neutral, so a player on a run still cleared the entire ring in one
+// visit and the opponent never picked up a marble. In the street that is a fair result; in a
+// game against a bot it means you never see the bot play.
+export const TURN_SHOTS = 4;
 
 // Where the k-th marble sits in the pile. Concentric rings, and within a ring the slots are
 // filled in mirror pairs so that ANY number of marbles gives a pile that is symmetric about the
@@ -46,7 +57,7 @@ export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR =
     stash: p.stash ?? 20, won: 0, armed: false,
   }));
   const m = { mode, seed, rng: r, ringR, ante, players: ps, turn: 0, pot: 0, marbles: [], phase: 'shoot',
-              winner: null, shotNo: 0, chances: CHANCES, log: [], lastEvents: null, note: '' };
+              winner: null, shotNo: 0, chances: CHANCES, turnShots: 0, log: [], lastEvents: null, note: '' };
 
   if (mode === 'chakri') {
     const n = ante * ps.length;
@@ -84,6 +95,8 @@ function addStrikers(m) {
 export const strikerId = (i) => `s${i}`;
 export const strikerOf = (m, i) => m.marbles.find((x) => x.id === strikerId(i));
 export const current = (m) => m.players[m.turn];
+/** Shots left in the current turn -- whichever of the two limits bites first. */
+export const shotsLeft = (m) => Math.max(0, Math.min(m.chances, TURN_SHOTS - m.turnShots));
 export const potMarbles = (m) => m.marbles.filter((x) => !x.striker && !x.out && !x.inPill);
 export const fieldMarblesOf = (m, pid) => m.marbles.filter((x) => !x.striker && x.owner === pid && !x.captured);
 
@@ -116,7 +129,7 @@ export function applyShot(m, shot) {
   const before = m.marbles.map((x) => ({ ...x }));
   const res = simulate(m.marbles, { ...shot, id }, { ringR: m.ringR, pill: m.mode === 'pill' });
   m.marbles = res.marbles;
-  m.shotNo++;
+  m.shotNo++; m.turnShots++;
   m.log.push({ by: p.id, angle: shot.angle, power: shot.power, foul: !!shot.foul });
 
   const sum = { by: p.id, gained: 0, lost: 0, foul: false, chot: null, pilled: false, continues: false, note: '' };
@@ -127,14 +140,14 @@ export function applyShot(m, shot) {
     payFoul(m, p, sum);
   } else if (m.mode === 'chakri') {
     const outs = ev.knockedOut.length;
+    m.chances -= 1;                           // every shot costs one
     if (outs > 0) {
       p.stash += outs; p.won += outs; m.pot -= outs; sum.gained = outs;
       m.marbles = m.marbles.filter((x) => !ev.knockedOut.includes(x.id));
-      m.chances = CHANCES;                    // a score buys the whole turn back
-      sum.continues = true;
+      m.chances = Math.min(CHANCES, m.chances + 1);   // ...and a score buys that one back
+      sum.continues = m.chances > 0;
       sum.note = outs > 1 ? `${outs} out in one chot!` : 'Out — shoot again.';
     } else {
-      m.chances -= 1;
       sum.continues = m.chances > 0;
       sum.note = sum.continues
         ? `${ev.firstContact ? 'Hit it — not hard enough to cross the line' : 'Missed'} — ${m.chances} chance${m.chances > 1 ? 's' : ''} left.`
@@ -154,12 +167,13 @@ export function applyShot(m, shot) {
     // and your striker stays where it stopped; you shoot again from there, which is the whole
     // point: the second shot is a short, awkward one from wherever the first left you.
     const me = strikerOf(m, p.id);
+    m.chances -= 1;
     if (!p.armed) {
       if (me.inPill) {
-        p.armed = true; sum.pilled = true; sum.continues = true; m.chances = CHANCES;
+        p.armed = true; sum.pilled = true; m.chances = Math.min(CHANCES, m.chances + 1);
+        sum.continues = m.chances > 0;
         sum.note = 'In the pill — you are chot-ready.';
       } else {
-        m.chances -= 1;
         sum.continues = m.chances > 0;
         sum.note = sum.continues
           ? `Missed the pill — ${m.chances} chance${m.chances > 1 ? 's' : ''} left, shoot from where it lies.`
@@ -173,18 +187,22 @@ export function applyShot(m, shot) {
         victim.stash -= take - 1; p.stash += take; p.won += take;
         hit.captured = true;
         m.marbles = m.marbles.filter((x) => x.id !== hit.id);
-        sum.gained = take; sum.chot = victim.id; sum.continues = true; m.chances = CHANCES;
+        sum.gained = take; sum.chot = victim.id; m.chances = Math.min(CHANCES, m.chances + 1);
+        sum.continues = m.chances > 0;
         sum.note = `Chot on ${victim.name} — ${take} marbles.`;
-      } else { m.chances -= 1; sum.continues = m.chances > 0; sum.note = 'Hit your own.'; }
+      } else { sum.continues = m.chances > 0; sum.note = 'Hit your own.'; }
     } else {
-      m.chances -= 1;
       sum.continues = m.chances > 0;
       sum.note = sum.continues ? `No chot — ${m.chances} left.` : 'No chot. Turn over.';
     }
     sum.chancesLeft = m.chances;
   }
 
-  if (!sum.continues) { respot(m, p.id); m.turn = (m.turn + 1) % m.players.length; m.chances = CHANCES; }
+  if (sum.continues && m.turnShots >= TURN_SHOTS) { sum.continues = false; sum.note += ' Turn over.'; }
+  if (!sum.continues) {
+    respot(m, p.id); m.turn = (m.turn + 1) % m.players.length;
+    m.chances = CHANCES; m.turnShots = 0;
+  }
   checkOver(m);
   m.lastEvents = ev; m.note = sum.note;
   return { frames: res.frames, events: ev, summary: sum, before };
