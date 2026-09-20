@@ -1,0 +1,7 @@
+# Cloudflare Pages project for the game itself. public/ IS the site -- there is no build step.
+name = "kanche"
+pages_build_output_dir = "public"
+compatibility_date = "2026-09-01"
+
+# Online play is a separate Worker with its own Durable Object binding; see worker/wrangler.toml.
+# It is deployed independently so the game page stays a pure static deploy.

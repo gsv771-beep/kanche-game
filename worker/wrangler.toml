@@ -1,0 +1,13 @@
+# Reference config for the standalone Kanche worker. Deploy this from its own directory --
+# it is intentionally NOT part of the tax app's wrangler.toml or its D1 database.
+name = "kanche"
+main = "kanche-worker.js"
+compatibility_date = "2026-09-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

@@ -1,0 +1,10 @@
+{
+  "name": "Kanche — gully marbles",
+  "short_name": "Kanche",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#2a1b10",
+  "theme_color": "#3a2617",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

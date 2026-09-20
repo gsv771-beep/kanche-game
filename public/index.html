@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- viewport-fit=cover so the board runs under the notch and the home indicator -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Kanche — gully marbles</title>
+<meta name="description" content="Chakri and Pill Chot, the street marble games, played with a thumb on a phone.">
+<meta name="theme-color" content="#3a2617">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kanche">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+
+<!-- ============ SETUP ============ -->
+<section id="screen-setup" class="screen is-on">
+  <div class="setup-scroll">
+    <h1 class="title">कंचे <span>Kanche</span></h1>
+    <p class="sub">Gully marbles. Goli, bante, lakhoti — whatever your mohalla called them.</p>
+
+    <h2 class="lbl">The game</h2>
+    <div class="cards" id="pick-mode">
+      <button class="card is-sel" data-mode="chakri">
+        <span class="card-t">Chakri</span>
+        <span class="card-d">Everyone stakes marbles in the ring. Knock them out, keep them.</span>
+      </button>
+      <button class="card" data-mode="pill">
+        <span class="card-t">Pill Chot</span>
+        <span class="card-d">Land in the pill to arm yourself, then chot their marbles off the field.</span>
+      </button>
+    </div>
+
+    <h2 class="lbl">Who you are playing</h2>
+    <div class="cards cards-bot" id="pick-bot">
+      <button class="card bot" data-bot="chotu"><span class="ava-box"></span><span class="card-t">Chotu</span><span class="card-d">Gully kid</span></button>
+      <button class="card bot is-sel" data-bot="bunty"><span class="ava-box"></span><span class="card-t">Bunty</span><span class="card-d">Mohalla champ</span></button>
+      <button class="card bot" data-bot="ustaad"><span class="ava-box"></span><span class="card-t">Pappu</span><span class="card-d">Ustaad</span></button>
+    </div>
+
+    <h2 class="lbl">Your striker</h2>
+    <div class="cards" id="pick-striker">
+      <button class="card is-sel" data-striker="goli">
+        <span class="card-t">Goli</span>
+        <span class="card-d">Standard. Fast, accurate, gets knocked off line.</span>
+      </button>
+      <button class="card" data-striker="dhampar">
+        <span class="card-t">Dhampar</span>
+        <span class="card-d">Big and heavy. Ploughs straight through — but slow, short range, and it sticks in the ring.</span>
+      </button>
+    </div>
+
+    <button id="btn-play" class="btn-big">Khelo</button>
+    <p class="fine">Drag back anywhere to aim. Let go when the ring is tight.</p>
+  </div>
+</section>
+
+<!-- ============ GAME ============ -->
+<section id="screen-game" class="screen">
+  <header class="hud">
+    <div class="hud-side">
+      <div class="who you"><span class="dot"></span><span id="you-name">You</span></div>
+      <div class="stash"><span id="you-stash">0</span><small>goli</small></div>
+    </div>
+    <div class="hud-mid">
+      <div class="pot-lbl" id="pot-lbl">POT</div>
+      <div class="pot" id="pot">0</div>
+    </div>
+    <div class="hud-side right">
+      <div class="who"><span id="bot-name">Bunty</span><span class="dot dot-b"></span></div>
+      <div class="stash"><span id="bot-stash">0</span><small>goli</small></div>
+    </div>
+  </header>
+
+  <div class="ava-slot" id="ava-slot"><div class="ava-wrap" id="ava-wrap"></div><div class="bubble" id="bubble" hidden></div></div>
+
+  <canvas id="board"></canvas>
+
+  <footer class="bar">
+    <button id="btn-mute" class="icon-btn" aria-label="Sound">🔊</button>
+    <div class="msg" id="msg">Your shot.</div>
+    <button id="btn-line" class="chip" hidden>Take the line</button>
+  </footer>
+  <div class="turn-flag" id="turn-flag" hidden></div>
+</section>
+
+<!-- ============ RESULT ============ -->
+<section id="screen-over" class="screen">
+  <div class="over-box">
+    <h2 id="over-title">—</h2>
+    <p id="over-line" class="sub"></p>
+    <div class="tally" id="tally"></div>
+    <button id="btn-jota" class="btn-ghost">Kali Jota — double or nothing</button>
+    <button id="btn-again" class="btn-big">Ek aur</button>
+    <button id="btn-menu" class="btn-ghost">Change game</button>
+  </div>
+</section>
+
+<!-- ============ KALI JOTA ============ -->
+<div id="jota" class="modal" hidden>
+  <div class="modal-box">
+    <h3>Kali Jota</h3>
+    <p class="sub" id="jota-sub">He has a fistful of goli. Odd or even?</p>
+    <div class="fist" id="fist">✊</div>
+    <div class="jota-btns">
+      <button class="btn-big half" data-call="kali">Kali <small>odd</small></button>
+      <button class="btn-big half" data-call="jota">Jota <small>even</small></button>
+    </div>
+    <p class="fine" id="jota-out"></p>
+    <button class="btn-ghost" id="jota-close">Rehne do</button>
+  </div>
+</div>
+
+<div id="a2hs" class="a2hs" hidden>
+  <span>Add to Home Screen for full screen: <b>Share</b> → <b>Add to Home Screen</b></span>
+  <button id="a2hs-x" aria-label="Dismiss">×</button>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

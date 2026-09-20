@@ -1,0 +1,12 @@
+{
+  "name": "kanche",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chakri, Pill Chot and Kali Jota -- the Indian street marble games, played with a thumb on a phone.",
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/serve.mjs",
+    "test": "node tests/kanche.test.mjs",
+    "deploy": "wrangler pages deploy public"
+  }
+}
