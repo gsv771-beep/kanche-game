@@ -6,7 +6,13 @@
 //
 // Units are real: metres, seconds, kilograms-ish (mass is relative, only ratios matter).
 
-export const FIELD = { x0: -0.62, x1: 0.62, y0: -0.62, y1: 0.86 };
+// The patch. This is ALSO the camera window -- render.js imports it rather than keeping its own
+// copy, because when the two drifted apart the field was 26cm taller than the screen, exactly in
+// the direction knocked-out marbles fly. Two marbles a shot came to rest where you could not see
+// them, and a striker that landed there was impossible to aim. One rectangle, one source.
+// Safe to widen: the camera fits by min(W/width, H/height), so the visible extent is always at
+// least the field in both axes. Anything inside this rectangle is on screen on every device.
+export const FIELD = { x0: -0.50, x1: 0.50, y0: -0.42, y1: 0.82 };
 // The board is deliberately NOT to scale. A real 17mm kancha inside a 2.2ft ring is a 39:1
 // ratio -- honest, and an unreadable dot on a phone. Everything here is tuned to ~19:1, which
 // is what the game looks like in memory rather than in a photograph.

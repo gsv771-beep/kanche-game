@@ -81,7 +81,7 @@ function start() {
         striker: pick.bot === 'ustaad' ? 'dhampar' : 'goli', skin: 'lakhoti', stash: 20 },
     ],
   });
-  phase = 'aim'; fromLine = false; play = null; botPreview = null;
+  phase = 'aim'; fromLine = false; play = null; botPreview = null; window.__match = match;
   C.cancel(ctl);
   $('#bot-name').textContent = match.players[1].name;
   $('#pot-lbl').textContent = match.mode === 'pill' ? 'ON FIELD' : 'POT';
@@ -300,7 +300,7 @@ function meter() {
 
 // Proof of life for the inline diagnostic in index.html.
 window.KANCHE_BOOTED = true;
-window.__ctl = ctl;   // read by the browser tests to assert which way the aim actually points
+window.__ctl = ctl; window.__match = null;   // read by the browser tests to assert which way the aim actually points
 const buildEl = $('#build'); if (buildEl) buildEl.textContent = 'build ' + (window.KANCHE_BUILD || '?');
 
 R.setup(canvas);

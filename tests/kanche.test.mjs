@@ -1,5 +1,5 @@
 // Kanche: physics, rules and the bot ladder. Run: node tests/kanche.test.mjs
-import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, dist, powerToClear } from '../public/js/physics.js';
+import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, FIELD, dist, powerToClear } from '../public/js/physics.js';
 import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES } from '../public/js/rules.js';
 import { chooseShot, LEVELS } from '../public/js/bot.js';
 import { predictPath, firstOnLine } from '../public/js/input.js';
@@ -266,6 +266,35 @@ const board = () => [
   const s = strikerOf(n, 0); s.x = 0; s.y = 0.16;
   applyShot(n, { angle: -Math.PI / 2, power: 0.30 });
   ok('landing in the pill arms you and refills the chances', n.players[0].armed && n.chances === CHANCES);
+}
+
+// ---------- nothing may come to rest where the player cannot see it ----------
+{
+  // The field and the camera were separate rectangles and drifted 26cm apart, exactly in the
+  // direction knocked-out marbles fly: two marbles a shot settled off-screen, and a striker
+  // that landed there could not be aimed. render.js now imports FIELD as its camera window,
+  // so this test fails the moment they diverge again.
+  ok('the ring and the shooting line both fit inside the patch',
+    RING_R + 0.014 < Math.min(-FIELD.y0, FIELD.x1) && SHOOT_LINE < FIELD.y1);
+  ok('there is still room outside the ring for a marble to be knocked clear',
+    -FIELD.y0 > RING_R + 3 * 0.014, `${(-FIELD.y0 - RING_R).toFixed(3)}m of run-out`);
+
+  let offscreen = 0, knocked = 0, shots = 0;
+  for (let g = 0; g < 25; g++) {
+    const m = newMatch({ seed: g * 7 + 1, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+    const st = strikerOf(m, 0);
+    for (const pw of [0.7, 0.85, 1.0]) {
+      for (const off of [-0.25, 0, 0.25]) {
+        const res = simulate(m.marbles, { id: 's0', angle: Math.atan2(-st.y, -st.x) + off, power: pw }, { ringR: m.ringR });
+        shots++; knocked += res.events.knockedOut.length;
+        for (const q of res.marbles) {
+          if (q.x < FIELD.x0 - 1e-6 || q.x > FIELD.x1 + 1e-6 || q.y < FIELD.y0 - 1e-6 || q.y > FIELD.y1 + 1e-6) offscreen++;
+        }
+      }
+    }
+  }
+  ok('no marble ever rests outside the patch', offscreen === 0, `${shots} shots, ${offscreen} escaped`);
+  ok('and marbles are still being knocked clear of the ring', knocked > shots * 0.4, `${knocked} in ${shots} shots`);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll Kanche tests passed');

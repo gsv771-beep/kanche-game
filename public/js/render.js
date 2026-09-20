@@ -1,10 +1,10 @@
 // Canvas drawing. Knows nothing about rules -- it is handed positions and draws them.
-import { RING_R, SHOOT_LINE, PILL_R } from './physics.js';
+import { RING_R, SHOOT_LINE, PILL_R, FIELD } from './physics.js';
 import { rng } from './rng.js';
 
-// The camera window, in metres. Narrower than the physics field so the ring fills a portrait
-// phone: fit by width, and the vertical slack becomes room for the HUD and the thumb.
-const VIEW = { x0: -0.37, x1: 0.37, y0: -0.36, y1: 0.82 };
+// The camera window IS the playfield -- see FIELD in physics.js. Keeping a second copy here is
+// what let a marble roll somewhere the player could not see it.
+const VIEW = FIELD;
 
 const SKINS = {
   doodh:   { core: '#fdfbf4', rim: '#cfc6ae', swirl: null },
@@ -118,6 +118,21 @@ export function draw(view) {
   ctx.drawImage(ground, 0, 0);
 
   const m = view.match;
+  // Beyond the patch there is nothing to play on. On a wide screen the canvas shows more than
+  // the field, so shade the surround -- otherwise a marble stopping dead at the boundary looks
+  // like a glitch rather than the edge of the dirt.
+  {
+    const l = sx(VIEW.x0), r = sx(VIEW.x1), t = sy(VIEW.y0), bt = sy(VIEW.y1);
+    ctx.save(); ctx.fillStyle = 'rgba(18,10,5,0.55)';
+    if (l > 0) ctx.fillRect(0, 0, l, H);
+    if (r < W) ctx.fillRect(r, 0, W - r, H);
+    if (t > 0) ctx.fillRect(l, 0, r - l, t);
+    if (bt < H) ctx.fillRect(l, bt, r - l, H - bt);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
+    ctx.strokeRect(l, t, r - l, bt - t);
+    ctx.restore();
+  }
+
   if (m.mode === 'pill') {
     const px = sx(0), py = sy(0), pr = PILL_R * scale;
     ctx.fillStyle = 'rgba(25,14,8,0.92)';

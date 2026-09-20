@@ -143,6 +143,17 @@ It also has nerves — σ widens ~30% on a big pot or when down to its last marb
 the hero shot when losing badly. It never shoots instantly: 0.9–2.6s of visible deliberation,
 with the aim line wandering around the shot it actually chose. Instant shots read as a machine.
 
+## The patch is the camera
+
+`FIELD` in `physics.js` is both the playable area and the camera window -- `render.js` imports it
+rather than keeping its own copy. They were once separate rectangles that drifted 26cm apart,
+exactly in the direction knocked-out marbles fly: two marbles a shot came to rest off the top of
+the screen, and a striker that landed there was impossible to aim at all. A test asserts that
+nothing ever rests outside it, so the two cannot diverge again.
+
+Widening it is safe in both axes because the camera fits by `min(W/width, H/height)`, so the
+visible extent is always at least the field.
+
 ## Why the board is not to scale
 
 A real 17mm kancha inside a 2.2ft ring is a 39:1 ratio. Honest, and an unreadable dot on a phone.
