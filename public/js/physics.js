@@ -110,7 +110,11 @@ export function simulate(marbles, shot, opts = {}) {
   shooter.vx = Math.cos(shot.angle) * speed;
   shooter.vy = Math.sin(shot.angle) * speed;
 
-  const events = { firstContact: null, knockedOut: [], pilled: [], impacts: [], strikerInRing: false, settledAt: 0 };
+  // `touched` is every non-striker marble involved in ANY collision, not just the one the
+  // striker met first -- a marble knocked into its neighbour has touched two, and under the
+  // clean-hit rule that ends the turn.
+  const events = { firstContact: null, knockedOut: [], pilled: [], impacts: [], touched: [],
+                   strikerInRing: false, settledAt: 0 };
   const frames = [];
   const snap = () => { const f = new Float32Array(m.length * 2); m.forEach((x, i) => { f[i * 2] = x.x; f[i * 2 + 1] = x.y; }); frames.push(f); };
   snap();
@@ -138,6 +142,7 @@ export function simulate(marbles, shot, opts = {}) {
           const hit = collide(m[i], m[j]);
           if (hit > 0.05) {
             events.impacts.push({ t, speed: hit, frame: frames.length });
+            for (const q of [m[i], m[j]]) if (!q.striker && !events.touched.includes(q.id)) events.touched.push(q.id);
             if (!events.firstContact && (m[i].id === shot.id || m[j].id === shot.id)) {
               events.firstContact = m[i].id === shot.id ? m[j].id : m[i].id;
             }

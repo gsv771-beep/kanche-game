@@ -12,6 +12,16 @@ const ok = (name, cond, detail = '') => { console.log(`${cond ? 'PASS' : 'FAIL'}
 const near = (name, a, e, tol = 1e-6) => ok(name, Math.abs(a - e) <= tol, `got ${a}, expected ${e}`);
 const hash = (frames) => frames.reduce((h, f) => f.reduce((g, v) => (Math.imul(g ^ Math.round(v * 1e6), 16777619) >>> 0), h), 2166136261);
 
+/** A match with one target only, so a test can exercise a rule without the clean-hit rule
+ *  firing on marbles it did not mean to involve. */
+const solo = (seed, at) => {
+  const m = newMatch({ seed, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  m.marbles = m.marbles.filter((x) => x.striker || x.id === 'p0');
+  const t = m.marbles.find((x) => x.id === 'p0');
+  if (at) { t.x = at.x; t.y = at.y; }
+  return { m, t, s: strikerOf(m, 0) };
+};
+
 const board = () => [
   marble('s0', 0, SHOOT_LINE, { striker: 'goli', owner: 0 }),
   ...Array.from({ length: 8 }, (_, i) => { const p = pileSlot(i); return marble(`p${i}`, p.x, p.y, {}); }),
@@ -67,19 +77,26 @@ const board = () => [
 // ---------- chakri rules ----------
 {
   const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
-  ok('both players ante up and the pot holds the lot', m.pot === 8 && m.players.every((p) => p.stash === 16));
-  ok('the pot marbles are on the board', potMarbles(m).length === 8);
+  ok('both players ante up', m.players.every((p) => p.stash === 16));
+  ok('the staked marbles are on the ring, plus one in the middle', m.pot === 9 && potMarbles(m).length === 9);
+  const edge = potMarbles(m).filter((x) => Math.hypot(x.x, x.y) > 0.2);
+  ok('eight sit on the boundary', edge.length === 8);
+  ok('one sits at the centre', potMarbles(m).some((x) => Math.hypot(x.x, x.y) < 1e-9));
+  ok('the ring is evenly spaced, so neither seat gets the better line', (() => {
+    const gaps = edge.map((a) => Math.min(...edge.filter((b) => b !== a).map((b) => dist(a.x, a.y, b.x, b.y))));
+    return Math.max(...gaps) - Math.min(...gaps) < 1e-6;
+  })());
+  ok('and no two are close enough to be hit together by accident',
+    Math.min(...edge.map((a) => Math.min(...edge.filter((b) => b !== a).map((b) => dist(a.x, a.y, b.x, b.y))))) > 6 * 0.014);
 
-  // Force a knockout by teeing one up on the rim.
-  const t = potMarbles(m)[0];
-  t.x = 0; t.y = -(m.ringR - 0.02);
-  strikerOf(m, 0).x = 0; strikerOf(m, 0).y = SHOOT_LINE;
-  const before = m.players[0].stash;
-  const out = applyShot(m, { angle: -Math.PI / 2, power: 0.95 });
+  const { m: g, s: gs } = solo(5, { x: 0, y: -(m.ringR - 0.02) });
+  gs.x = 0; gs.y = SHOOT_LINE;
+  const potWas = g.pot, stashWas = g.players[0].stash;
+  const out = applyShot(g, { angle: -Math.PI / 2, power: 0.95 });
   ok('knocking one out pays the shooter and empties it from the pot',
-    out.summary.gained >= 1 && m.players[0].stash > before && m.pot < 8);
-  ok('and the shooter keeps the turn', out.summary.continues && m.turn === 0);
-  ok('the pre-shot snapshot is returned for playback', out.before.length >= m.marbles.length);
+    out.summary.gained >= 1 && g.players[0].stash > stashWas && g.pot < potWas);
+  ok('and the shooter keeps the turn', out.summary.continues && g.turn === 0);
+  ok('the pre-shot snapshot is returned for playback', out.before.length >= g.marbles.length);
 }
 {
   // The striker-in-ring forfeit is judged at the END of a turn, not on every miss -- otherwise
@@ -93,7 +110,7 @@ const board = () => [
   for (let i = 0; i < CHANCES - 1; i++) { strikerOf(m, 0).x = 0; strikerOf(m, 0).y = 0.12; last = applyShot(m, { angle: Math.PI / 2, power: 0.02 }); }
   ok('but the last one forfeits the striker', last.summary.foul && m.players[0].stash === before - 1);
   ok('and the turn passes', m.turn === 1);
-  ok('the forfeit goes back into the ring', m.pot === 9);
+  ok('the forfeit goes back into the ring', m.pot === 10);
 }
 {
   const m = newMatch({ seed: 11, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
@@ -190,12 +207,12 @@ const board = () => [
   // A score refunds the chance it spent -- it does not hand back the whole set. The first cut
   // did, and a player scoring once every three shots then held the board for the entire game:
   // measured, the opponent never took a single turn in 13 games out of 15.
-  const m = newMatch({ seed: 37, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
-  applyShot(m, { angle: Math.PI / 2, power: 0.05 });
+  const { m } = solo(37, { x: 0, y: -(0.26 - 0.02) });
+  applyShot(m, { angle: Math.PI / 2, power: 0.05 });          // a deliberate dud
   ok('down to fewer chances after a miss', m.chances === CHANCES - 1);
   const before = m.chances;
-  const t = potMarbles(m)[0]; t.x = 0; t.y = -(m.ringR - 0.02);
-  const s = strikerOf(m, 0); s.x = 0; s.y = SHOOT_LINE;
+  // applyShot swaps in a fresh marble array, so a reference taken before the shot is stale.
+  const st = strikerOf(m, 0); st.x = 0; st.y = SHOOT_LINE;
   const out = applyShot(m, { angle: -Math.PI / 2, power: 0.95 });
   ok('a score costs nothing but does not refill the set', out.summary.gained >= 1 && m.chances === before,
     `${before} -> ${m.chances}`);
@@ -207,10 +224,12 @@ const board = () => [
   ok('a turn is capped at a few shots', TURN_SHOTS >= 2 && TURN_SHOTS <= 6);
   let shots = 0;
   while (m.turn === 0 && shots < 30) {
-    // tee one up on the rim every time, so every shot scores
-    const t = potMarbles(m)[0];
-    if (!t) break;
-    t.x = 0; t.y = -(m.ringR - 0.02);
+    // one marble on the board, teed up on the rim, so every shot is a clean score
+    m.marbles = m.marbles.filter((x) => x.striker || !x.striker === false || x.id === potMarbles(m)[0]?.id);
+    const keep = potMarbles(m)[0];
+    if (!keep) break;
+    m.marbles = m.marbles.filter((x) => x.striker || x.id === keep.id);
+    keep.x = 0; keep.y = -(m.ringR - 0.02);
     const st = strikerOf(m, 0); st.x = 0; st.y = SHOOT_LINE;
     applyShot(m, { angle: -Math.PI / 2, power: 0.95 });
     shots++;
@@ -249,28 +268,35 @@ const board = () => [
 {
   // The reported bug: a shot that visibly HITS still scores nothing, with nothing on screen
   // saying why. The guidance the meter draws has to agree with what the simulator does.
-  const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
-  const s = strikerOf(m, 0);
-  const aim = Math.atan2(-s.y, -s.x);
-  const tgt = firstOnLine(m.marbles, { x: s.x, y: s.y }, aim, 's0');
-  ok('the aim line finds the marble it will actually hit', !!tgt && !tgt.striker);
+  // powerToClear describes a SQUARE hit -- the marble leaving along the line of centres,
+  // straight out of the ring. So aim at the ghost point, or the test is measuring a thin cut
+  // against a formula that never claimed to cover one.
+  const { m, t: tgt, s } = solo(5, { x: 0, y: -(0.26 - 0.03) });
+  const ex = tgt.x / Math.hypot(tgt.x, tgt.y), ey = tgt.y / Math.hypot(tgt.x, tgt.y);
+  const gx = tgt.x - ex * (tgt.r + s.r), gy = tgt.y - ey * (tgt.r + s.r);
+  const aim = Math.atan2(gy - s.y, gx - s.x);
+  ok('the aim line finds the marble it will actually hit',
+    !!firstOnLine(m.marbles, { x: s.x, y: s.y }, aim, 's0'));
   const need = powerToClear(s, tgt, m.ringR, s.x, s.y);
   ok('the required power is a sane fraction of the bar', need > 0.2 && need < 1, need.toFixed(2));
 
-  const outs = (pw) => simulate(m.marbles, { id: 's0', angle: aim, power: pw }, { ringR: m.ringR }).events.knockedOut.length;
-  ok('below the mark nothing clears the line', outs(Math.max(0.05, need - 0.18)) === 0);
-  ok('at the mark, or just past it, something does', outs(Math.min(0.99, need + 0.1)) > 0,
-    `need ${need.toFixed(2)}`);
-  // There is a real band between "reaches the pile" and "clears the line": the shot connects,
-  // nothing goes out, and that is exactly what read as the game being broken.
-  ok('just under the mark the shot connects but scores nothing', (() => {
-    const ev = simulate(m.marbles, { id: 's0', angle: aim, power: need - 0.06 }, { ringR: m.ringR }).events;
-    return !!ev.firstContact && ev.knockedOut.length === 0;
-  })(), `need ${need.toFixed(2)}`);
-  ok('and well under it the striker does not even arrive', (() => {
-    const ev = simulate(m.marbles, { id: 's0', angle: aim, power: Math.max(0.05, need - 0.25) }, { ringR: m.ringR }).events;
-    return !ev.firstContact;
-  })());
+  // Sweep the bar rather than poking at magic offsets: find the power at which the striker
+  // first arrives, and the power at which something first clears the line.
+  const at = (pw) => simulate(m.marbles, { id: 's0', angle: aim, power: pw }, { ringR: m.ringR }).events;
+  let pReach = null, pOut = null;
+  for (let pw = 0.05; pw <= 1.0001; pw += 0.01) {
+    const ev = at(pw);
+    if (pReach === null && ev.firstContact) pReach = pw;
+    if (pOut === null && ev.knockedOut.length) { pOut = pw; break; }
+  }
+  ok('there is a power at which the striker arrives', pReach !== null, `${(pReach || 0).toFixed(2)}`);
+  ok('and a higher one at which the marble clears the line', pOut !== null && pOut > pReach,
+    `reaches ${pReach?.toFixed(2)}, clears ${pOut?.toFixed(2)}`);
+  ok('between them the shot connects and scores nothing -- the band that read as a broken game',
+    at((pReach + pOut) / 2).firstContact && at((pReach + pOut) / 2).knockedOut.length === 0);
+  ok('the mark drawn on the meter agrees with where it actually clears',
+    Math.abs(need - pOut) < 0.12, `meter says ${need.toFixed(2)}, reality ${pOut.toFixed(2)}`);
+  ok('below the arrival power nothing is touched at all', !at(Math.max(0.05, pReach - 0.1)).firstContact);
 }
 
 // ---------- chances in the hole mode ----------
@@ -333,6 +359,37 @@ const board = () => [
   const inPage = (html.match(/KANCHE_BUILD = '([^']+)'/) || [])[1];
   ok('index.html declares a build', !!inPage, inPage);
   ok('version.json matches it', inPage === ver.build, `page ${inPage} vs version.json ${ver.build}`);
+}
+
+// ---------- the clean-hit rule ----------
+{
+  // A shot may disturb exactly one marble. Knock one into its neighbour, or carom the striker
+  // through the pack, and the turn is over however much went out. This is what separates a
+  // precision game from a power one, and in bot-vs-bot it is the whole skill gap: the beginner
+  // scatters on 20% of shots, the ustaad on 3%.
+  const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const edge = potMarbles(m).filter((x) => Math.hypot(x.x, x.y) > 0.2);
+
+  // set two marbles side by side so one must shove the other, and aim at the pair
+  const a = edge[0], b2 = edge[1];
+  b2.x = a.x + 0.02; b2.y = a.y + 0.015;
+  const st = strikerOf(m, 0);
+  const shot = { angle: Math.atan2(a.y - st.y, a.x - st.x), power: 0.85 };
+  const res = applyShot(m, shot);
+  ok('a shot that disturbs two marbles is reported as touching both', res.events.touched.length >= 2,
+    `touched ${res.events.touched.length}`);
+  ok('and it ends the turn regardless of what went out', res.summary.dirty === true && !res.summary.continues);
+  ok('the turn passes to the opponent', m.turn === 1);
+}
+{
+  // The counterpart: a lone marble, cleanly struck, scores and keeps the turn.
+  const m = newMatch({ seed: 9, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  m.marbles = m.marbles.filter((x) => x.striker || x.id === 'p0');
+  const t = m.marbles.find((x) => x.id === 'p0');
+  const st = strikerOf(m, 0);
+  const res = applyShot(m, { angle: Math.atan2(t.y - st.y, t.x - st.x), power: 0.8 });
+  ok('one marble touched is a clean shot', res.events.touched.length === 1 && !res.summary.dirty);
+  ok('it scores and the turn continues', res.summary.gained === 1 && res.summary.continues);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll Kanche tests passed');

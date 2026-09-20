@@ -86,9 +86,14 @@ striker. Ustaad Pappu shoots one.
 
 ## Rules as implemented
 
-**Chakri.** Everyone antes 4. The pot goes in the ring, you shoot from the line. Knock a marble
-fully outside the line and you keep it *and shoot again* — that continuation rule is the whole
-tension, the same as a break in pool.
+**Chakri.** Marbles are placed *on* the ring with one in the middle, and you shoot from the line.
+Knock one fully outside and you keep it *and shoot again*.
+
+The rule that makes it a game: **a shot may disturb exactly one marble.** Knock one into its
+neighbour, or carom your striker on through the pack, and the turn is over however much went out.
+That turns it from a power game into a precision one, and it is where the skill lives — measured
+bot against bot, the beginner scatters on 20% of shots and the ustaad on 3%, which alone widens
+the head-to-head gap from 73% to 90%.
 
 A turn is bounded twice over, and it needs both. Every shot spends a chance and a score refunds
 the one it spent, capped at the set — so a run continues only while it keeps scoring. On top of

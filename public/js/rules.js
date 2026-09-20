@@ -2,11 +2,12 @@
 // to the match happens in applyShot(), so the bot can run the real rules in its head and the
 // online layer can replay a turn from just the shot record.
 import { rng } from './rng.js';
-import { simulate, marble, RING_R, SHOOT_LINE, STRIKERS, dist } from './physics.js';
+import { simulate, marble, RING_R, SHOOT_LINE, STRIKERS, POT_MARBLE, dist } from './physics.js';
+const POT_R = POT_MARBLE.r;
 
 export const SKINS = ['doodh', 'kanch', 'neeli', 'lakhoti', 'steel'];
 export const MODES = {
-  chakri: { id: 'chakri', label: 'Chakri', blurb: 'Stake marbles in the ring. Knock them out, keep them.' },
+  chakri: { id: 'chakri', label: 'Chakri', blurb: 'Marbles on the ring, one in the middle. Knock one out — but touch a second and your turn is over.' },
   pill:   { id: 'pill',   label: 'Pill Chot', blurb: 'Land in the pill to arm yourself, then chot their marbles.' },
 };
 const CHOT_BONUS = 1;   // hitting an armed chot wins their marble plus this much from their stash
@@ -62,13 +63,21 @@ export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR =
   if (mode === 'chakri') {
     const n = ante * ps.length;
     ps.forEach((p) => { p.stash -= ante; });
-    m.pot = n;
+    m.pot = n;   // the centre marble is added below, on the house
     // A real pile is dumped, not laid out: golden-angle packing with a little jitter reads as
     // a heap while guaranteeing nothing starts overlapping.
+    // Marbles sit ON the ring with one in the middle, not heaped at the centre. That single
+    // change turns this from a power game into a precision one: every edge marble is a short
+    // push from being out, so the difficulty is hitting exactly one of them.
+    const rr = ringR - POT_R - 0.006;
     for (let i = 0; i < n; i++) {
-      const s = pileSlot(i);
-      m.marbles.push(marble(`p${i}`, s.x, s.y, { skin: r.pick(SKINS) }));
+      // start at the top and space evenly -- a full ring is mirror-symmetric by construction,
+      // so neither seat gets the better line
+      const th = Math.PI / 2 + (i * 2 * Math.PI) / n;
+      m.marbles.push(marble(`p${i}`, Math.cos(th) * rr, Math.sin(th) * rr, { skin: r.pick(SKINS) }));
     }
+    m.marbles.push(marble('pc', 0, 0, { skin: r.pick(SKINS) }));   // the one in the middle
+    m.pot = n + 1;
   } else {
     // Pill Chot: the pill sits at the centre, everyone's stake is scattered across the patch.
     ps.forEach((p) => {
@@ -141,12 +150,18 @@ export function applyShot(m, shot) {
   } else if (m.mode === 'chakri') {
     const outs = ev.knockedOut.length;
     m.chances -= 1;                           // every shot costs one
-    if (outs > 0) {
+    // The clean-hit rule: a shot may disturb exactly one marble. Knock one into its neighbour,
+    // or carom your striker through the pack, and the turn is over however much went out.
+    const dirty = ev.touched.length > 1;
+    if (dirty) {
+      sum.continues = false; sum.dirty = true;
+      sum.note = `Touched ${ev.touched.length} marbles — turn over.`;
+    } else if (outs > 0) {
       p.stash += outs; p.won += outs; m.pot -= outs; sum.gained = outs;
       m.marbles = m.marbles.filter((x) => !ev.knockedOut.includes(x.id));
       m.chances = Math.min(CHANCES, m.chances + 1);   // ...and a score buys that one back
       sum.continues = m.chances > 0;
-      sum.note = outs > 1 ? `${outs} out in one chot!` : 'Out — shoot again.';
+      sum.note = 'Clean — out and yours. Shoot again.';
     } else {
       sum.continues = m.chances > 0;
       sum.note = sum.continues

@@ -87,6 +87,10 @@ function candidates(match, pid) {
 function value(match, pid, res, lvl) {
   const ev = res.events;
   let v = ev.knockedOut.length * 10;
+  // Under the clean-hit rule a scatter ends the turn, so disturbing a second marble wipes out
+  // whatever the shot scored. The rollouts then teach the bot to pick isolated targets by
+  // itself, which is exactly the skill the rule is asking of a human.
+  if (match.mode === 'chakri' && ev.touched.length > 1) v = -12;
   if (match.mode === 'pill') v = (ev.pilled.length ? 8 : 0) + (ev.firstContact && !ev.firstContact.startsWith(`f${pid}`) && !ev.firstContact.startsWith('s') ? 10 : 0);
   // Being left in the ring only costs the striker if the TURN ends there, so it is a disaster
   // on the last chance and merely untidy when there are shots in hand.

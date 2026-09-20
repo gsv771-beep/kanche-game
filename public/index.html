@@ -18,7 +18,7 @@
 // failure has to put itself on the screen or it is invisible -- and an invisible failure is
 // indistinguishable from "it isn't showing".
 (function () {
-  window.KANCHE_BUILD = 'b10';
+  window.KANCHE_BUILD = 'b11';
   var shown = false;
   function bail(what, detail) {
     if (shown) return; shown = true;
@@ -81,7 +81,7 @@
     <div class="cards" id="pick-mode">
       <button class="card is-sel" data-mode="chakri">
         <span class="card-t">Chakri</span>
-        <span class="card-d">Everyone stakes marbles in the ring. Knock them out, keep them.</span>
+        <span class="card-d">Marbles on the ring, one in the middle. Knock one clean out and it's yours — but touch a second and your turn is over.</span>
       </button>
       <button class="card" data-mode="pill">
         <span class="card-t">Pill Chot</span>
