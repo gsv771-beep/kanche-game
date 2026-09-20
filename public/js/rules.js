@@ -11,6 +11,12 @@ export const MODES = {
 };
 const CHOT_BONUS = 1;   // hitting an armed chot wins their marble plus this much from their stash
 
+// Chances. In the street game a turn is not one shot: miss and your striker stays exactly where
+// it stopped, and you shoot again from there. That is what makes position matter -- a miss
+// leaves you somewhere, and where it leaves you is the next problem. A turn ends when the
+// chances run out, not on the first mistake.
+export const CHANCES = 3;
+
 // Where the k-th marble sits in the pile. Concentric rings, and within a ring the slots are
 // filled in mirror pairs so that ANY number of marbles gives a pile that is symmetric about the
 // shooting axis. This is not fussiness: a lopsided pile hands one seat a better line on every
@@ -40,7 +46,7 @@ export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR =
     stash: p.stash ?? 20, won: 0, armed: false,
   }));
   const m = { mode, seed, rng: r, ringR, ante, players: ps, turn: 0, pot: 0, marbles: [], phase: 'shoot',
-              winner: null, shotNo: 0, log: [], lastEvents: null, note: '' };
+              winner: null, shotNo: 0, chances: CHANCES, log: [], lastEvents: null, note: '' };
 
   if (mode === 'chakri') {
     const n = ante * ps.length;
@@ -124,19 +130,25 @@ export function applyShot(m, shot) {
     if (outs > 0) {
       p.stash += outs; p.won += outs; m.pot -= outs; sum.gained = outs;
       m.marbles = m.marbles.filter((x) => !ev.knockedOut.includes(x.id));
+      m.chances = CHANCES;                    // a score buys the whole turn back
       sum.continues = true;
-      sum.note = outs > 1 ? `${outs} out in one chot!` : 'Out — keep shooting.';
+      sum.note = outs > 1 ? `${outs} out in one chot!` : 'Out — shoot again.';
+    } else {
+      m.chances -= 1;
+      sum.continues = m.chances > 0;
+      sum.note = sum.continues
+        ? `${ev.firstContact ? 'Touched, nothing out' : 'Missed'} — ${m.chances} chance${m.chances > 1 ? 's' : ''} left.`
+        : 'Chances used up.';
     }
-    if (ev.strikerInRing && outs === 0) {
-      // The street rule with teeth: stuck inside AND nothing to show for it, the striker is
-      // forfeit. Knock something out and parking inside is fine -- you shoot from there next,
-      // which is the continuation rule and the reason a good break wins the whole ring.
-      sum.foul = true; sum.continues = false;
-      sum.note = 'Stuck in the ring with nothing out — striker forfeit.';
+    // The striker-in-ring forfeit is judged when the TURN ends, not on every miss -- otherwise
+    // the chances rule and the forfeit rule contradict each other and a miss inside the ring
+    // costs you the striker before you have had your other shots.
+    if (!sum.continues && ev.strikerInRing) {
+      sum.foul = true;
+      sum.note = 'Turn over with the striker stuck in the ring — forfeit.';
       payFoul(m, p, sum);
-    } else if (outs === 0) {
-      sum.note = ev.firstContact ? 'Touched, but nothing crossed the line.' : 'Clean miss.';
     }
+    sum.chancesLeft = m.chances;
   } else {
     const me = strikerOf(m, p.id);
     if (!p.armed) {
@@ -156,7 +168,7 @@ export function applyShot(m, shot) {
     } else sum.note = 'No chot.';
   }
 
-  if (!sum.continues) { respot(m, p.id); m.turn = (m.turn + 1) % m.players.length; }
+  if (!sum.continues) { respot(m, p.id); m.turn = (m.turn + 1) % m.players.length; m.chances = CHANCES; }
   checkOver(m);
   m.lastEvents = ev; m.note = sum.note;
   return { frames: res.frames, events: ev, summary: sum, before };

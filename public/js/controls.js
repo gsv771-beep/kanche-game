@@ -14,15 +14,23 @@ const POWER_MS = 1150;        // a full sweep of the bar
 const ACC_MS = 720;           // the return run -- faster, because this is the skill
 const BAND = 0.075;           // half-width of the green band, as a fraction of the bar
 export const MAX_PULL = 7 * Math.PI / 180;   // worst-case angular error on a badly timed release
-const STEP = 2.2 * Math.PI / 180;            // one tap of an aim arrow
-const SWEEP = 34 * Math.PI / 180;            // per second, holding an aim arrow down
+const STEP = 1.4 * Math.PI / 180;            // one tap of an aim arrow: fine, for the last nudge
+const SWEEP0 = 11 * Math.PI / 180;           // holding starts slow, so a held press is still precise
+const SWEEP1 = 62 * Math.PI / 180;           // ...and accelerates, so crossing the board is quick
+const RAMP = 1.1;                            // seconds to reach full speed
 
 export function createControls() {
-  return { angle: -Math.PI / 2, stage: 'idle', power: 0, marker: 0, t0: 0, acc: 0, held: 0 };
+  return { angle: -Math.PI / 2, stage: 'idle', power: 0, marker: 0, t0: 0, acc: 0, heldT: 0 };
 }
 
 export const nudge = (c, dir) => { c.angle += dir * STEP; };
-export const sweep = (c, dir, dt) => { c.angle += dir * SWEEP * dt; };
+/** Holding an arrow ramps from a fine crawl to a fast sweep, so one control does both jobs. */
+export function sweep(c, dir, dt) {
+  c.heldT += dt;
+  const u = Math.min(1, c.heldT / RAMP);
+  c.angle += dir * (SWEEP0 + (SWEEP1 - SWEEP0) * u * u) * dt;
+}
+export const releaseHold = (c) => { c.heldT = 0; };
 
 /** Advance the meter. Returns true while a shot is being set up. */
 export function tick(c, now) {
@@ -46,6 +54,10 @@ export function tick(c, now) {
  * The angular error is derived here and folded into the shot, so the record still replays.
  */
 export function press(c, now) {
+  // Re-read the marker from `now` rather than trusting the last rendered frame. A tap landing
+  // between frames is otherwise stale by a frame -- 33ms in Low Power Mode, which is 4.6% of the
+  // bar against a 7.5% band. The meter must not get easier or harder with the refresh rate.
+  tick(c, now);
   if (c.stage === 'idle') { c.stage = 'power'; c.t0 = now; c.marker = 0; return null; }
   if (c.stage === 'power') {
     c.power = Math.max(0.08, c.marker);

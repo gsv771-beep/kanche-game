@@ -1,8 +1,9 @@
 // Kanche: physics, rules and the bot ladder. Run: node tests/kanche.test.mjs
 import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, dist } from '../public/js/physics.js';
-import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles } from '../public/js/rules.js';
+import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES } from '../public/js/rules.js';
 import { chooseShot, LEVELS } from '../public/js/bot.js';
-import { steadiness, spreadFor, inWindow, predictPath, FOUL_AT } from '../public/js/input.js';
+import { predictPath } from '../public/js/input.js';
+import * as C from '../public/js/controls.js';
 import { rng } from '../public/js/rng.js';
 
 let failures = 0;
@@ -80,12 +81,16 @@ const board = () => [
   ok('the pre-shot snapshot is returned for playback', out.before.length >= m.marbles.length);
 }
 {
-  // A striker that stops inside the ring with nothing out is forfeit.
+  // The striker-in-ring forfeit is judged at the END of a turn, not on every miss -- otherwise
+  // it contradicts the chances rule and takes the striker before you have had your other shots.
   const m = newMatch({ seed: 9, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
   const s = strikerOf(m, 0); s.x = 0.0; s.y = 0.12;
   const before = m.players[0].stash;
-  const out = applyShot(m, { angle: Math.PI / 2, power: 0.06 });
-  ok('stuck in the ring with nothing out forfeits the striker', out.summary.foul && m.players[0].stash === before - 1);
+  const first = applyShot(m, { angle: Math.PI / 2, power: 0.02 });
+  ok('a miss inside the ring with chances in hand costs nothing', !first.summary.foul && m.players[0].stash === before);
+  let last = null;
+  for (let i = 0; i < CHANCES - 1; i++) { strikerOf(m, 0).x = 0; strikerOf(m, 0).y = 0.12; last = applyShot(m, { angle: Math.PI / 2, power: 0.02 }); }
+  ok('but the last one forfeits the striker', last.summary.foul && m.players[0].stash === before - 1);
   ok('and the turn passes', m.turn === 1);
   ok('the forfeit goes back into the ring', m.pot === 9);
 }
@@ -124,17 +129,71 @@ const board = () => [
   ok('the books balance', m.players[0].stash + m.players[1].stash === a0 + b0);
 }
 
-// ---------- the shot gesture ----------
+// ---------- the controls ----------
 {
-  ok('the steadiness ring tightens as you settle', steadiness(0) > steadiness(200) && steadiness(200) > steadiness(339));
-  ok('it holds steady through the release window', steadiness(400) === steadiness(900));
-  ok('then it shakes wider again', steadiness(1600) > steadiness(900));
-  ok('a release in the window has no spread at all', spreadFor(steadiness(500)) === 0);
-  ok('a snatched release sprays', spreadFor(steadiness(0)) > 0.08, `${spreadFor(steadiness(0)).toFixed(3)} rad`);
-  ok('the window is flagged for the player', inWindow(steadiness(500)) && !inWindow(steadiness(0)));
-  ok('full power is past the thumb-lift line', 1 > FOUL_AT && FOUL_AT > 0.8);
   const path = predictPath(board(), { x: 0, y: SHOOT_LINE }, -Math.PI / 2, 0.8, 's0', 1);
   ok('the aim line stops at the first marble in the way', path.length > 2 && path[path.length - 1].y > -RING_R);
+
+  const c = C.createControls();
+  ok('a tap of an arrow is a fine nudge, under two degrees', (() => {
+    const a0 = c.angle; C.nudge(c, 1); return c.angle > a0 && c.angle - a0 < 2 * Math.PI / 180;
+  })());
+  ok('holding it ramps up: the second second sweeps further than the first', (() => {
+    const q = C.createControls(); let first = 0;
+    for (let i = 0; i < 60; i++) C.sweep(q, 1, 1 / 60); first = q.angle;
+    for (let i = 0; i < 60; i++) C.sweep(q, 1, 1 / 60);
+    return (q.angle - first) > first * 1.4;
+  })());
+  ok('arrows turn the right way: right increases the angle, which points right on screen', (() => {
+    const q = C.createControls(); const up = q.angle; C.nudge(q, 1);
+    return Math.cos(q.angle) > Math.cos(up);      // +x is screen-right
+  })());
+
+  // the three-tap meter
+  const m = C.createControls();
+  ok('it starts idle', m.stage === 'idle' && C.press(m, 0) === null);
+  ok('the first tap starts the power sweep', m.stage === 'power');
+  C.tick(m, 500);
+  ok('the marker moves while sweeping', m.marker > 0 && m.marker <= 1);
+  ok('the second tap locks power and starts the release run', C.press(m, 500) === null && m.stage === 'accuracy' && m.power > 0);
+  C.tick(m, 500);
+  const perfect = C.press(m, 500 + 719);   // marker has run all the way home
+  ok('a release inside the green band is true', perfect && perfect.band && perfect.missed === 0, JSON.stringify(perfect));
+
+  const n = C.createControls();
+  C.press(n, 0); C.tick(n, 500); C.press(n, 500); C.tick(n, 505);
+  const early = C.press(n, 505);
+  ok('a release taken far from the band pulls the shot', early && !early.band && early.missed > 0, JSON.stringify(early));
+  ok('the pull is capped at a few degrees', C.MAX_PULL > 0 && C.MAX_PULL < 10 * Math.PI / 180);
+  ok('a run that is never released is treated as the worst case', (() => {
+    const q = C.createControls(); C.press(q, 0); C.tick(q, 400); C.press(q, 400);
+    C.tick(q, 400 + 900); return q.stage === 'late';
+  })());
+}
+
+// ---------- chances ----------
+{
+  const m = newMatch({ seed: 31, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  ok('a turn opens with a full set of chances', m.chances === CHANCES && CHANCES >= 2);
+  const away = { angle: Math.PI / 2, power: 0.05 };        // a deliberate dud, well clear of the pile
+  const a = applyShot(m, away);
+  ok('a miss costs a chance but keeps the turn', m.chances === CHANCES - 1 && m.turn === 0 && a.summary.continues);
+  const sx = strikerOf(m, 0).x, sy = strikerOf(m, 0).y;
+  ok('and the striker stays exactly where it stopped', Math.abs(strikerOf(m, 0).x - sx) < 1e-9 && Math.abs(strikerOf(m, 0).y - sy) < 1e-9);
+  for (let i = 0; i < CHANCES - 1; i++) applyShot(m, away);
+  ok('when the chances run out the turn passes', m.turn === 1);
+  ok('and the next player starts with a full set', m.chances === CHANCES);
+  ok('the striker is put back behind the line for next time', strikerOf(m, 0).y > 0.5);
+}
+{
+  // A score buys the whole turn back.
+  const m = newMatch({ seed: 37, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  applyShot(m, { angle: Math.PI / 2, power: 0.05 });
+  ok('down to fewer chances after a miss', m.chances === CHANCES - 1);
+  const t = potMarbles(m)[0]; t.x = 0; t.y = -(m.ringR - 0.02);
+  const s = strikerOf(m, 0); s.x = 0; s.y = SHOOT_LINE;
+  const out = applyShot(m, { angle: -Math.PI / 2, power: 0.95 });
+  ok('knocking one out refills the chances', out.summary.gained >= 1 && m.chances === CHANCES);
 }
 
 // ---------- the bot ----------

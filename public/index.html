@@ -18,7 +18,7 @@
 // failure has to put itself on the screen or it is invisible -- and an invisible failure is
 // indistinguishable from "it isn't showing".
 (function () {
-  window.KANCHE_BUILD = 'b5';
+  window.KANCHE_BUILD = 'b6';
   var shown = false;
   function bail(what, detail) {
     if (shown) return; shown = true;
@@ -87,7 +87,7 @@
     </div>
 
     <button id="btn-play" class="btn-big">Khelo</button>
-    <p class="fine">Aim with the arrows, then tap SHOOT three times: start, power, release.</p>
+    <p class="fine">Touch the board to aim. Then SHOOT: tap for power, tap again in the green.</p>
     <p class="fine build" id="build">build —</p>
   </div>
 </section>
@@ -116,6 +116,7 @@
   <div class="msgrow">
     <button id="btn-mute" class="icon-btn" aria-label="Sound">🔊</button>
     <div class="msg" id="msg">Your shot.</div>
+    <span class="chances" id="chances" aria-label="Chances left"></span>
     <button id="btn-line" class="chip" hidden>Take the line</button>
   </div>
 
@@ -131,7 +132,7 @@
       <button class="pad pad-go" id="pad-go">SHOOT</button>
       <button class="pad" id="pad-r" aria-label="Aim right">▶</button>
     </div>
-    <button class="swap" id="btn-scheme">Switch to drag aiming</button>
+    <p class="swap">Touch the board to aim · ◀ ▶ to nudge</p>
   </footer>
   <div class="turn-flag" id="turn-flag" hidden></div>
 </section>

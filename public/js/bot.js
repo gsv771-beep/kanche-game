@@ -88,7 +88,9 @@ function value(match, pid, res, lvl) {
   const ev = res.events;
   let v = ev.knockedOut.length * 10;
   if (match.mode === 'pill') v = (ev.pilled.length ? 8 : 0) + (ev.firstContact && !ev.firstContact.startsWith(`f${pid}`) && !ev.firstContact.startsWith('s') ? 10 : 0);
-  if (ev.strikerInRing && !ev.knockedOut.length) v -= 13;   // stuck with nothing out: striker forfeit
+  // Being left in the ring only costs the striker if the TURN ends there, so it is a disaster
+  // on the last chance and merely untidy when there are shots in hand.
+  if (ev.strikerInRing && !ev.knockedOut.length) v -= (match.chances <= 1 ? 13 : 3.5);
   if (!ev.firstContact && !ev.pilled.length) v -= 1.5;
   if (lvl.position && ev.knockedOut.length) {
     // Position play: the continuation rule means a run only survives if the striker lands useful.

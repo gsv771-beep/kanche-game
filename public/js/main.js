@@ -1,8 +1,8 @@
 // Wiring. Owns the screens, the turn loop and the playback of a settled shot.
-import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, MODES } from './rules.js';
+import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, CHANCES } from './rules.js';
 import { chooseShot, thinkTime, LEVELS } from './bot.js';
 import * as R from './render.js';
-import { attachInput, spreadFor, predictPath } from './input.js';
+import { attachInput, predictPath } from './input.js';
 import * as C from './controls.js';
 import * as A from './audio.js';
 import { mountAvatar, setAvatarState, AVATARS } from './avatars.js';
@@ -19,10 +19,10 @@ const store = {
 };
 
 let pick = { mode: 'chakri', bot: 'bunty', striker: 'goli' };
-let match = null, r = null, phase = 'idle', aim = null, fromLine = false, used = new Set();
+let match = null, r = null, phase = 'idle', fromLine = false, used = new Set();
 const ctl = C.createControls();
-let held = 0;                                   // an aim arrow being held down
-let scheme = store.get('scheme', 'buttons');    // buttons by default: it cannot fail to be found
+let held = 0;        // an aim arrow being held down
+let dragging = false;
 let play = null;          // { before, frames, events, summary, i, dinged:Set }
 let botPreview = null;    // the opponent's wandering aim line while it thinks
 const canvas = $('#board');
@@ -47,7 +47,7 @@ const myTurn = () => phase === 'aim' && match && current(match).kind === 'human'
 function holdPad(id, dir) {
   const el = $(id);
   const down = (e) => { if (!myTurn()) return; e.preventDefault(); A.unlock(); held = dir; C.nudge(ctl, dir); };
-  const up = () => { held = 0; };
+  const up = () => { held = 0; C.releaseHold(ctl); };
   el.addEventListener('pointerdown', down);
   ['pointerup', 'pointercancel', 'pointerleave'].forEach((n) => el.addEventListener(n, up));
 }
@@ -63,15 +63,7 @@ $('#pad-go').addEventListener('pointerdown', (e) => {
   fire({ angle: ctl.angle + err, power: shot.power, foul: shot.power > 0.92, fromLine });
   fromLine = false;
 });
-$('#btn-scheme').onclick = () => {
-  scheme = scheme === 'buttons' ? 'drag' : 'buttons';
-  store.set('scheme', scheme); C.cancel(ctl); applyScheme();
-};
-function applyScheme() {
-  document.body.classList.toggle('scheme-drag', scheme === 'drag');
-  $('#btn-scheme').textContent = scheme === 'buttons' ? 'Switch to drag aiming' : 'Switch to buttons';
-  if (scheme === 'drag') msg('Press anywhere on the board and drag back. Release when the ring is tight.');
-}
+
 
 /* ---------------- match ---------------- */
 function start() {
@@ -87,8 +79,8 @@ function start() {
         striker: pick.bot === 'ustaad' ? 'dhampar' : 'goli', skin: 'lakhoti', stash: 20 },
     ],
   });
-  phase = 'aim'; fromLine = false; play = null; aim = null; botPreview = null;
-  ctl.angle = -Math.PI / 2; C.cancel(ctl); applyScheme();
+  phase = 'aim'; fromLine = false; play = null; botPreview = null;
+  ctl.angle = -Math.PI / 2; C.cancel(ctl);
   $('#bot-name').textContent = match.players[1].name;
   $('#pot-lbl').textContent = match.mode === 'pill' ? 'ON FIELD' : 'POT';
   mountAvatar($('#ava-wrap'), pick.bot, 'idle');
@@ -97,8 +89,7 @@ function start() {
   show('screen-game');
   R.resize(); hud();
   msg(match.mode === 'pill' ? 'Land your striker in the pill first.'
-    : scheme === 'buttons' ? 'Aim with ◀ ▶, then SHOOT: tap for power, tap again in the green.'
-    : 'Press anywhere on the board and drag back. Release when the ring is tight.');
+    : 'Touch the board to aim, then SHOOT.');
   if (current(match).kind === 'bot') botTurn();
 }
 
@@ -115,25 +106,16 @@ const originFor = (pid) => {
   return { x: s.x, y: s.y };
 };
 
-const input = attachInput(canvas, {
-  isActive: () => myTurn() && scheme === 'drag',
+attachInput(canvas, {
+  isActive: myTurn,
   origin: () => originFor(0),
-  strikerId: () => strikerId(0),
-  marbles: () => match.marbles,
-  assist,
-  onAim: (a) => { aim = a; if (a) ctl.angle = a.angle; },
-  onShoot: (s) => {
-    // The release error is drawn from the match RNG, so the shot record replays exactly.
-    const err = r.normal(0, spreadFor(s.steady));
-    A.flick(s.power);
-    fire({ angle: s.angle + err, power: s.power, foul: s.foul, fromLine });
-    fromLine = false;
-  },
+  onAngle: (rad) => { ctl.angle = rad; },
+  onDragging: (v) => { dragging = v; },
 });
 
 function fire(shot) {
   phase = 'anim';
-  aim = null; botPreview = null;
+  botPreview = null;
   $('#btn-line').hidden = true;
   const out = applyShot(match, shot);
   play = { ...out, i: 0, t: 0, dinged: new Set() };
@@ -209,7 +191,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (match) {
-    let positions, a = aim;
+    let positions, a = null;
 
     if (play) {
       // Replay the settled shot at 60fps regardless of the display's refresh rate. A 120Hz
@@ -228,12 +210,12 @@ function frame(now) {
       if (play.i >= play.frames.length - 1) settle();
     } else {
       positions = match.marbles.map((m) => ({ ...m }));
-      if (!a && myTurn() && scheme === 'buttons') {
+      if (myTurn()) {
         // Always show where the marble is pointing. Nothing on screen until you guess the right
         // gesture is what made the first build unplayable.
         const o = originFor(0);
         const pw = ctl.stage === 'power' ? ctl.marker : (ctl.power || 0.45);
-        a = { kind: 'buttons', x: o.x, y: o.y, angle: ctl.angle, power: pw,
+        a = { kind: 'buttons', x: o.x, y: o.y, angle: ctl.angle, power: pw, dragging,
               path: predictPath(match.marbles, o, ctl.angle, pw, strikerId(0), assist()) };
       }
       if (phase === 'bot' && botPreview) {
@@ -245,7 +227,6 @@ function frame(now) {
     if (held && myTurn()) C.sweep(ctl, held, dt);
     C.tick(ctl, now);
     meter();
-    input.tick();
     R.draw({ match, positions, aim: a });
   }
   requestAnimationFrame(frame);
@@ -263,6 +244,11 @@ function hud() {
   $('#bot-stash').textContent = match.players[1].stash;
   $('#pot').textContent = match.mode === 'pill'
     ? match.marbles.filter((m) => !m.striker).length : match.pot;
+  const ch = $('#chances');
+  ch.innerHTML = match.mode === 'chakri'
+    ? Array.from({ length: CHANCES }, (_, i) => `<i class="${i < match.chances ? '' : 'spent'}"></i>`).join('')
+    : '';
+  ch.title = `${match.chances} of ${CHANCES} chances left this turn`;
 }
 let bubbleTimer = null;
 function bubble(text) {
@@ -291,6 +277,7 @@ function meter() {
 
 // Proof of life for the inline diagnostic in index.html.
 window.KANCHE_BOOTED = true;
+window.__ctl = ctl;   // read by the browser tests to assert which way the aim actually points
 const buildEl = $('#build'); if (buildEl) buildEl.textContent = 'build ' + (window.KANCHE_BUILD || '?');
 
 R.setup(canvas);
