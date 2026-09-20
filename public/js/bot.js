@@ -41,15 +41,18 @@ function candidates(match, pid) {
 
   if (match.mode === 'pill') {
     const p = match.players[pid];
-    if (!p.armed) {
-      // Drop into the pill: arrive slow enough to fall in rather than skate across.
-      const L = Math.hypot(me.x, me.y);
-      const v0 = Math.sqrt(0.85 * 0.85 + 2 * spec.decel * L);
-      out.push({ target: null, angle: Math.atan2(-me.y, -me.x), power: v0 / spec.maxSpeed, cut: 0, kind: 'pill' });
-      return out;
+    // The pill is always an option: at a hundred it is the finishing shot, and before that it is
+    // a staging post that shortens everything and cannot be knocked off.
+    const L0 = Math.hypot(me.x, me.y);
+    if (L0 > 0.02) {
+      const v0 = Math.sqrt(0.85 * 0.85 + 2 * spec.decel * L0);
+      out.push({ target: null, angle: Math.atan2(-me.y, -me.x), power: Math.min(0.99, v0 / spec.maxSpeed), cut: 0, kind: 'pill' });
     }
+    // At a hundred, or owing the hole a visit, the hole is the only shot worth taking.
+    if (p.points >= match.target || p.needsHole) return out;
+
     for (const t of match.marbles) {
-      if (t.striker || t.owner === pid || t.out) continue;
+      if (!t.striker || t.id === me.id || t.inPill) continue;   // a marble in the hole is safe
       const L = dist(me.x, me.y, t.x, t.y);
       const v0 = Math.sqrt(1.1 * 1.1 + 2 * spec.decel * L);
       const power = v0 / spec.maxSpeed;
@@ -86,12 +89,12 @@ function candidates(match, pid) {
 /** What a settled board is worth to the shooter. */
 function value(match, pid, res, lvl) {
   const ev = res.events;
+  if (match.mode === 'pill') return pillValue(match, pid, res);
   let v = ev.knockedOut.length * 10;
   // Under the clean-hit rule a scatter ends the turn, so disturbing a second marble wipes out
   // whatever the shot scored. The rollouts then teach the bot to pick isolated targets by
   // itself, which is exactly the skill the rule is asking of a human.
   if (match.mode === 'chakri' && ev.touched.length > 1) v = -12;
-  if (match.mode === 'pill') v = (ev.pilled.length ? 8 : 0) + (ev.firstContact && !ev.firstContact.startsWith(`f${pid}`) && !ev.firstContact.startsWith('s') ? 10 : 0);
   // Being left in the ring only costs the striker if the TURN ends there, so it is a disaster
   // on the last chance and merely untidy when there are shots in hand.
   if (ev.strikerInRing && !ev.knockedOut.length) v -= (match.chances <= 1 ? 13 : 3.5);
@@ -102,6 +105,24 @@ function value(match, pid, res, lvl) {
     const left = res.marbles.filter((x) => !x.striker && !x.out && !ev.knockedOut.includes(x.id));
     if (left.length && s) v += Math.max(0, 3 - Math.min(...left.map((t) => dist(s.x, s.y, t.x, t.y))) * 5);
   }
+  return v;
+}
+
+/** Simple Pill Chot: hunt the opponent, or finish in the hole at a hundred. */
+function pillValue(match, pid, res) {
+  const ev = res.events;
+  const me = res.marbles.find((x) => x.id === strikerId(pid));
+  const p = match.players[pid];
+  if (p.points >= match.target) return me.inPill ? 40 : -dist(me.x, me.y, 0, 0) * 6;
+  if (p.needsHole) return me.inPill ? 20 : -dist(me.x, me.y, 0, 0) * 6;
+
+  const hit = ev.firstContact && res.marbles.find((x) => x.id === ev.firstContact);
+  let v = hit && hit.striker && hit.owner !== pid ? 14 : 0;
+  if (me.inPill) v += 5;                                   // safe, central, and shortens the next shot
+  // Otherwise, ending nearer a target is worth something -- that is the "reduce the distance"
+  // part of the rule, and it is why going via the hole is often better than a long chase.
+  const foes = res.marbles.filter((x) => x.striker && x.id !== me.id);
+  if (foes.length) v += Math.max(0, 2.5 - Math.min(...foes.map((f) => dist(me.x, me.y, f.x, f.y))) * 3);
   return v;
 }
 

@@ -107,9 +107,21 @@ and walk back: the single best decision in the game.
 If your striker stops inside the ring *with nothing knocked out*, it is forfeit. Both halves
 matter — succeed and parking inside is fine, which is what makes a good break worth the risk.
 
-**Pill Chot.** A pill is dug at the centre and everyone's stake is scattered across the patch.
-Land your striker in the pill to become chot-ready, then hit an opponent's marble to take it plus
-a penalty from their pocket.
+**Pill Chot (simple).** A count, not a stake. Nothing on the patch but the players and the hole.
+A chot on an opponent's marble is ten — and then you owe the hole a visit before the next one
+counts. Reach the target and you still have to *sink it in the hole* to finish, so the last shot
+of a game is a touch shot after ten of hunting.
+
+The trip through the hole is the rule that makes it work. Without it, after a hit your marble is
+sitting right beside theirs and the next hit is free: two bots shoved each other across the patch
+at a 95% hit rate, and whoever shot first won every single game. With it the game has a two-beat
+rhythm — hunt, then return — and the hole earns its place as the central, unkockable staging post
+the street rule describes.
+
+The count scales with the company (`50 × (players − 1)`): the street runs to a hundred, which
+assumes a crowd of marbles to hunt. Head-to-head that measured at nearly sixty shots a game.
+
+Your marble stays on the patch between turns. It is a target, and that exposure is the game.
 
 **Kali Jota.** The sideline bet. A fist of marbles, you call kali (odd) or jota (even). Right, you
 take the handful; wrong, you pay the same number across.
@@ -154,6 +166,17 @@ beats Bunty 14/24. Every match terminates.
 It also has nerves — σ widens ~30% on a big pot or when down to its last marbles — and goes for
 the hero shot when losing badly. It never shoots instantly: 0.9–2.6s of visible deliberation,
 with the aim line wandering around the shot it actually chose. Instant shots read as a machine.
+
+## Known: the opener has a real edge
+
+Who shoots first is a fair toss, and the opener wins about 70–78% of matches between identical
+bots, in both modes. That is a lot for a coin flip to decide. Docking the victim ten points to
+create catch-up was tried and measured: it doubled game length and did nothing for the edge, so
+it was dropped rather than kept on the theory that it ought to help.
+
+The right fix is **lagging** — the pre-game throw at the hole that decides turn order in the
+street game. That makes the advantage *earned* rather than arbitrary, which is the difference
+between a flaw and a feature. `newMatch` already takes a `first` argument for it.
 
 ## The patch is the camera
 

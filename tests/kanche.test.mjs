@@ -1,6 +1,6 @@
 // Kanche: physics, rules and the bot ladder. Run: node tests/kanche.test.mjs
 import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, FIELD, dist, powerToClear } from '../public/js/physics.js';
-import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES, TURN_SHOTS, shotsLeft } from '../public/js/rules.js';
+import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES, TURN_SHOTS, shotsLeft, targetFor, CHOT_POINTS } from '../public/js/rules.js';
 import { chooseShot, LEVELS } from '../public/js/bot.js';
 import { predictPath, firstOnLine } from '../public/js/input.js';
 import * as C from '../public/js/controls.js';
@@ -15,7 +15,7 @@ const hash = (frames) => frames.reduce((h, f) => f.reduce((g, v) => (Math.imul(g
 /** A match with one target only, so a test can exercise a rule without the clean-hit rule
  *  firing on marbles it did not mean to involve. */
 const solo = (seed, at) => {
-  const m = newMatch({ seed, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   m.marbles = m.marbles.filter((x) => x.striker || x.id === 'p0');
   const t = m.marbles.find((x) => x.id === 'p0');
   if (at) { t.x = at.x; t.y = at.y; }
@@ -76,7 +76,7 @@ const board = () => [
 
 // ---------- chakri rules ----------
 {
-  const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   ok('both players ante up', m.players.every((p) => p.stash === 16));
   ok('the staked marbles are on the ring, plus one in the middle', m.pot === 9 && potMarbles(m).length === 9);
   const edge = potMarbles(m).filter((x) => Math.hypot(x.x, x.y) > 0.2);
@@ -101,7 +101,7 @@ const board = () => [
 {
   // The striker-in-ring forfeit is judged at the END of a turn, not on every miss -- otherwise
   // it contradicts the chances rule and takes the striker before you have had your other shots.
-  const m = newMatch({ seed: 9, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 9, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   const s = strikerOf(m, 0); s.x = 0.0; s.y = 0.12;
   const before = m.players[0].stash;
   const first = applyShot(m, { angle: Math.PI / 2, power: 0.02 });
@@ -113,31 +113,21 @@ const board = () => [
   ok('the forfeit goes back into the ring', m.pot === 10);
 }
 {
-  const m = newMatch({ seed: 11, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 11, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   const s = strikerOf(m, 0); s.x = 0.05; s.y = 0.05;
   applyShot(m, { angle: 0, power: 0.02, fromLine: true });
   ok('taking the line puts the striker back behind it', Math.abs(strikerOf(m, 0).y - SHOOT_LINE) < 0.35);
 }
 {
-  const m = newMatch({ seed: 13, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 13, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   const before = m.players[0].stash;
   applyShot(m, { angle: -Math.PI / 2, power: 0.99, foul: true });
   ok('an overdrawn flick is a thumb-lift foul', m.players[0].stash === before - 1 && m.turn === 1);
 }
 
-// ---------- pill chot ----------
-{
-  const m = newMatch({ seed: 17, mode: 'pill', ante: 3, players: [{ name: 'A' }, { name: 'B' }] });
-  ok('everyone scatters their stake on the field', m.marbles.filter((x) => !x.striker).length === 6);
-  ok('nobody starts armed', m.players.every((p) => !p.armed));
-  const s = strikerOf(m, 0); s.x = 0; s.y = 0.16;
-  applyShot(m, { angle: -Math.PI / 2, power: 0.30 });   // the pill is at the origin, up the board
-  ok('landing in the pill arms you for a chot', m.players[0].armed === true);
-}
-
 // ---------- kali jota ----------
 {
-  const m = newMatch({ seed: 21, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 21, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   const a0 = m.players[0].stash, b0 = m.players[1].stash;
   const r1 = kaliJota(m, 0, 1, 'kali', 3);
   ok('calling kali on an odd fistful wins it', r1.right && m.players[0].stash === a0 + 3 && m.players[1].stash === b0 - 3);
@@ -191,7 +181,7 @@ const board = () => [
 
 // ---------- chances ----------
 {
-  const m = newMatch({ seed: 31, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 31, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   ok('a turn opens with a full set of chances', m.chances === CHANCES && CHANCES >= 2);
   const away = { angle: Math.PI / 2, power: 0.05 };        // a deliberate dud, well clear of the pile
   const a = applyShot(m, away);
@@ -220,7 +210,7 @@ const board = () => [
 }
 {
   // The hard ceiling: no run, however hot, keeps the board forever.
-  const m = newMatch({ seed: 41, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 41, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   ok('a turn is capped at a few shots', TURN_SHOTS >= 2 && TURN_SHOTS <= 6);
   let shots = 0;
   while (m.turn === 0 && shots < 30) {
@@ -245,7 +235,7 @@ const board = () => [
     let wins = 0, finished = 0;
     for (let i = 0; i < n; i++) {
       const seed = 4000 + i * 37, r = rng(seed);
-      const m = newMatch({ seed, mode: 'chakri', ante: 4, players: [{ name: 'A', kind: 'bot', level: a }, { name: 'B', kind: 'bot', level: b }] });
+      const m = newMatch({ seed, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A', kind: 'bot', level: a }, { name: 'B', kind: 'bot', level: b }] });
       let g = 0;
       while (m.phase !== 'over' && g++ < 250) applyShot(m, chooseShot(m, m.turn, r));
       if (m.phase === 'over') finished++;
@@ -301,23 +291,13 @@ const board = () => [
 
 // ---------- chances in the hole mode ----------
 {
-  const m = newMatch({ seed: 17, mode: 'pill', ante: 3, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 17, mode: 'pill', first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   ok('the hole mode opens with a full set of chances too', m.chances === CHANCES);
-  const away = { angle: 0.3, power: 0.05 };
+  const away = { angle: 0.3, power: 0.04 };
   const a = applyShot(m, away);
-  ok('missing the pill costs a chance, not the turn', m.turn === 0 && a.summary.continues && m.chances === CHANCES - 1);
-  const sx = strikerOf(m, 0).x, sy = strikerOf(m, 0).y;
-  ok('and the striker stays where it stopped', Math.abs(strikerOf(m, 0).x - sx) < 1e-9 && Math.abs(strikerOf(m, 0).y - sy) < 1e-9);
+  ok('a wasted shot costs a chance, not the turn', m.turn === 0 && a.summary.continues && m.chances === CHANCES - 1);
   for (let i = 0; i < CHANCES - 1; i++) applyShot(m, away);
   ok('the turn passes once they are used up', m.turn === 1 && m.chances === CHANCES);
-
-  const n = newMatch({ seed: 17, mode: 'pill', ante: 3, players: [{ name: 'A' }, { name: 'B' }] });
-  applyShot(n, away);
-  const was = n.chances;
-  const s = strikerOf(n, 0); s.x = 0; s.y = 0.16;
-  applyShot(n, { angle: -Math.PI / 2, power: 0.30 });
-  ok('landing in the pill arms you and costs you nothing', n.players[0].armed && n.chances === was,
-    `${was} -> ${n.chances}`);
 }
 
 // ---------- nothing may come to rest where the player cannot see it ----------
@@ -333,7 +313,7 @@ const board = () => [
 
   let offscreen = 0, knocked = 0, shots = 0;
   for (let g = 0; g < 25; g++) {
-    const m = newMatch({ seed: g * 7 + 1, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+    const m = newMatch({ seed: g * 7 + 1, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
     const st = strikerOf(m, 0);
     for (const pw of [0.7, 0.85, 1.0]) {
       for (const off of [-0.25, 0, 0.25]) {
@@ -367,7 +347,7 @@ const board = () => [
   // through the pack, and the turn is over however much went out. This is what separates a
   // precision game from a power one, and in bot-vs-bot it is the whole skill gap: the beginner
   // scatters on 20% of shots, the ustaad on 3%.
-  const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   const edge = potMarbles(m).filter((x) => Math.hypot(x.x, x.y) > 0.2);
 
   // set two marbles side by side so one must shove the other, and aim at the pair
@@ -383,7 +363,7 @@ const board = () => [
 }
 {
   // The counterpart: a lone marble, cleanly struck, scores and keeps the turn.
-  const m = newMatch({ seed: 9, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const m = newMatch({ seed: 9, mode: 'chakri', ante: 4, first: 0, players: [{ name: 'A' }, { name: 'B' }] });
   m.marbles = m.marbles.filter((x) => x.striker || x.id === 'p0');
   const t = m.marbles.find((x) => x.id === 'p0');
   const st = strikerOf(m, 0);

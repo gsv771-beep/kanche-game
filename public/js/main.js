@@ -89,13 +89,15 @@ function start() {
   phase = 'aim'; fromLine = false; play = null; botPreview = null; window.__match = match;
   C.cancel(ctl);
   $('#bot-name').textContent = match.players[1].name;
-  $('#pot-lbl').textContent = match.mode === 'pill' ? 'ON FIELD' : 'POT';
+  $('#pot-lbl').textContent = match.mode === 'pill' ? `TO ${match.target}` : 'POT';
+  document.querySelectorAll('.stash small').forEach((e) => { e.textContent = match.mode === 'pill' ? 'pts' : 'goli'; });
   mountAvatar($('#ava-wrap'), pick.bot, 'idle');
   bubble(say(pick.bot, 'start', r, used));
   $('#a2hs').hidden = true;      // never let the hint sit over the board
   show('screen-game');
   R.resize(); hud(); defaultAim();
-  msg(match.mode === 'pill' ? 'Land your striker in the pill first.'
+  msg(match.mode === 'pill'
+    ? `Chot their marble for 10, then back through the hole. First to ${match.target} sinks it to win.`
     : 'Touch the board to aim, then SHOOT.');
   if (current(match).kind === 'bot') botTurn();
 }
@@ -111,8 +113,12 @@ function defaultAim() {
   const near = (list) => list.length
     ? list.reduce((a, b) => (dist(o.x, o.y, a.x, a.y) <= dist(o.x, o.y, b.x, b.y) ? a : b))
     : { x: 0, y: 0 };
+  // In Pill Chot what you should be pointing at changes shot to shot: the hole when you owe it
+  // a visit or you are on the target, an opponent otherwise.
+  const p0 = match.players[0];
   const t = match.mode === 'pill'
-    ? (match.players[0].armed ? near(match.marbles.filter((x) => !x.striker && x.owner !== 0)) : { x: 0, y: 0 })
+    ? ((p0.needsHole || p0.points >= match.target) ? { x: 0, y: 0 }
+       : near(match.marbles.filter((x) => x.striker && x.owner !== 0 && !x.inPill)))
     : near(match.marbles.filter((x) => !x.striker && !x.out));
   ctl.angle = Math.atan2(t.y - o.y, t.x - o.x);
 }
@@ -187,10 +193,15 @@ function settle() {
 
 function over() {
   const you = match.players[0], bot = match.players[1];
-  const won = you.won > bot.won;
-  $('#over-title').textContent = won ? 'Jeet gaye!' : you.won === bot.won ? 'Barabar' : 'Haar gaye';
-  $('#over-line').textContent = won ? `You walk home with ${you.won} extra goli.`
-    : you.won === bot.won ? 'Nobody is richer. Again?' : `${bot.name} pockets ${bot.won}.`;
+  const pill = match.mode === 'pill';
+  const won = pill ? match.winner === 0 : you.won > bot.won;
+  const tie = !pill && you.won === bot.won;
+  $('#over-title').textContent = won ? 'Jeet gaye!' : tie ? 'Barabar' : 'Haar gaye';
+  $('#over-line').textContent = pill
+    ? (won ? `${you.points} and sunk. ${bot.name} left on ${bot.points}.`
+           : `${bot.name} got there first — ${bot.points} to your ${you.points}.`)
+    : won ? `You walk home with ${you.won} extra goli.`
+    : tie ? 'Nobody is richer. Again?' : `${bot.name} pockets ${bot.won}.`;
   pocketBase = store.get('pocket', 0);
   if (won) store.set('wins', store.get('wins', 0) + 1);
   tally();
@@ -200,6 +211,10 @@ function over() {
 /** This match's net for each side, plus the running pocket -- the only number that carries. */
 function tally() {
   const you = match.players[0], bot = match.players[1];
+  if (match.mode === 'pill') {
+    $('#tally').innerHTML = `<div><b>${you.points}</b>you</div><div><b>${bot.points}</b>${bot.name}</div>`;
+    return;
+  }
   const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
   const pocket = pocketBase + you.won;
   store.set('pocket', pocket);
@@ -279,10 +294,12 @@ requestAnimationFrame(frame);
 
 /* ---------------- chrome ---------------- */
 function hud() {
-  $('#you-stash').textContent = match.players[0].stash;
-  $('#bot-stash').textContent = match.players[1].stash;
-  $('#pot').textContent = match.mode === 'pill'
-    ? match.marbles.filter((m) => !m.striker).length : match.pot;
+  const pill = match.mode === 'pill';
+  $('#you-stash').textContent = pill ? match.players[0].points : match.players[0].stash;
+  $('#bot-stash').textContent = pill ? match.players[1].points : match.players[1].stash;
+  $('#pot').textContent = pill
+    ? (match.players[0].needsHole ? 'HOLE' : match.players[0].points >= match.target ? 'SINK' : '—')
+    : match.pot;
   const ch = $('#chances');
   const left = shotsLeft(match);
   ch.innerHTML = Array.from({ length: CHANCES }, (_, i) => `<i class="${i < left ? '' : 'spent'}"></i>`).join('');

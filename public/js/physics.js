@@ -105,6 +105,9 @@ export function simulate(marbles, shot, opts = {}) {
   const shooter = m.find((x) => x.id === shot.id);
   if (!shooter) throw new Error(`no marble ${shot.id}`);
 
+  // A marble resting in the pill is frozen by the loop below, so shooting it out has to lift it
+  // first. This is what lets the hole work as a staging post rather than a trap.
+  shooter.inPill = false;
   const spec = STRIKERS[shooter.striker] || POT_MARBLE;
   const speed = Math.max(0, Math.min(1, shot.power)) * (spec.maxSpeed ?? 5.6);
   shooter.vx = Math.cos(shot.angle) * speed;

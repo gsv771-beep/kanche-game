@@ -8,8 +8,26 @@ const POT_R = POT_MARBLE.r;
 export const SKINS = ['doodh', 'kanch', 'neeli', 'lakhoti', 'steel'];
 export const MODES = {
   chakri: { id: 'chakri', label: 'Chakri', blurb: 'Marbles on the ring, one in the middle. Knock one out — but touch a second and your turn is over.' },
-  pill:   { id: 'pill',   label: 'Pill Chot', blurb: 'Land in the pill to arm yourself, then chot their marbles.' },
+  pill:   { id: 'pill',   label: 'Pill Chot', blurb: 'Race to 100. Every chot on their marble is 10. At 100, sink it in the hole to finish.' },
 };
+
+// Simple Pill Chot: a count, not a stake. Each chot on an opponent is ten, and at a hundred you
+// must still put your marble in the hole to finish -- so the last shot of the game is a touch
+// shot, not a hit, which is a nice reversal after ten shots of hunting.
+//
+// Between chots you have to go back through the hole. Without that the game collapses: after a
+// hit your marble is sitting right next to theirs, so the next hit is free, and two bots simply
+// shoved each other across the patch at a 95% hit rate while whoever shot first won every
+// single game. Going via the hole is what the street rule means by taking the hole's help -- it
+// is central, nothing can knock you out of it, and everything is nearer from there.
+export const CHOT_POINTS = 10;
+/**
+ * The street count runs to a hundred, which assumes a crowd -- with four other marbles to hunt
+ * you reach it quickly. Head-to-head it is ten chots, and since each one has to be paid for
+ * with a trip back through the hole, that measured out at nearly sixty shots a game. So the
+ * count scales with the company: fifty for a duel, a hundred for three, and so on.
+ */
+export const targetFor = (players) => 50 * (players - 1);
 const CHOT_BONUS = 1;   // hitting an armed chot wins their marble plus this much from their stash
 
 // Chances. A turn is not one shot: miss and your striker stays exactly where it stopped, and
@@ -50,14 +68,18 @@ export function pileSlot(k) {
   }
 }
 
-export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR = RING_R } = {}) {
+export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR = RING_R, first = null } = {}) {
   const r = rng(seed);
   const ps = players.map((p, i) => ({
     id: i, name: p.name, kind: p.kind || 'human', level: p.level || 'champ',
     avatar: p.avatar || 'chotu', striker: p.striker || 'goli', skin: p.skin || SKINS[i % SKINS.length],
     stash: p.stash ?? 20, won: 0, armed: false,
   }));
-  const m = { mode, seed, rng: r, ringR, ante, players: ps, turn: 0, pot: 0, marbles: [], phase: 'shoot',
+  const m = { mode, seed, rng: r, ringR, ante, players: ps, target: targetFor(ps.length),
+              // Who shoots first is a toss, not a fixture. In a race to a target the opener has
+              // a real edge -- measured at four wins in five between identical bots -- and in
+              // the street it is settled by lagging rather than by seating.
+              turn: first ?? r.int(ps.length), pot: 0, marbles: [], phase: 'shoot',
               winner: null, shotNo: 0, chances: CHANCES, turnShots: 0, log: [], lastEvents: null, note: '' };
 
   if (mode === 'chakri') {
@@ -79,17 +101,10 @@ export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR =
     m.marbles.push(marble('pc', 0, 0, { skin: r.pick(SKINS) }));   // the one in the middle
     m.pot = n + 1;
   } else {
-    // Pill Chot: the pill sits at the centre, everyone's stake is scattered across the patch.
-    ps.forEach((p) => {
-      p.stash -= ante;
-      for (let i = 0; i < ante; i++) {
-        let x, y, tries = 0;
-        do {
-          x = r.range(-0.40, 0.40); y = r.range(-0.40, 0.34); tries++;
-        } while (tries < 60 && (dist(x, y, 0, 0) < 0.10 || m.marbles.some((q) => dist(x, y, q.x, q.y) < 0.062)));
-        m.marbles.push(marble(`f${p.id}_${i}`, x, y, { owner: p.id, skin: p.skin }));
-      }
-    });
+    // Nothing on the field but the players themselves and the hole. The only targets are each
+    // other's marbles, which is what makes it a hunt rather than a demolition.
+    ps.forEach((p) => { p.points = 0; p.needsHole = false; });
+    m.scatter = true;
   }
   addStrikers(m);
   return m;
@@ -97,9 +112,17 @@ export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR =
 
 function addStrikers(m) {
   m.players.forEach((p, i) => {
-    const spread = (i - (m.players.length - 1) / 2) * 0.11;
-    m.marbles.push(marble(strikerId(i), spread, SHOOT_LINE, { striker: p.striker, owner: i, skin: p.skin }));
+    // Pill Chot starts everyone spread around the hole at equal range, not shoulder to shoulder
+    // on the line: two marbles that begin 11cm apart just shove each other sideways all game.
+    const pos = m.scatter ? scatterStart(i, m.players.length)
+      : { x: (i - (m.players.length - 1) / 2) * 0.11, y: SHOOT_LINE };
+    m.marbles.push(marble(strikerId(i), pos.x, pos.y, { striker: p.striker, owner: i, skin: p.skin }));
   });
+}
+/** Evenly around the hole, mirrored about the shooting axis so no seat starts closer. */
+function scatterStart(i, n) {
+  const th = Math.PI / 2 - (Math.PI * (2 * i + 1)) / (2 * n) + Math.PI / 2;
+  return { x: Math.cos(th) * 0.30, y: Math.sin(th) * 0.30 + 0.12 };
 }
 export const strikerId = (i) => `s${i}`;
 export const strikerOf = (m, i) => m.marbles.find((x) => x.id === strikerId(i));
@@ -108,6 +131,7 @@ export const current = (m) => m.players[m.turn];
 export const shotsLeft = (m) => Math.max(0, Math.min(m.chances, TURN_SHOTS - m.turnShots));
 export const potMarbles = (m) => m.marbles.filter((x) => !x.striker && !x.out && !x.inPill);
 export const fieldMarblesOf = (m, pid) => m.marbles.filter((x) => !x.striker && x.owner === pid && !x.captured);
+export const pointsOf = (m, pid) => m.players[pid].points || 0;
 
 /** Where the striker sits for the shot about to be taken. */
 export function shotOrigin(m, i) {
@@ -178,34 +202,38 @@ export function applyShot(m, shot) {
     }
     sum.chancesLeft = m.chances;
   } else {
-    // The hole mode gets chances too -- this is the one the rule was asked for. Miss the pill
-    // and your striker stays where it stopped; you shoot again from there, which is the whole
-    // point: the second shot is a short, awkward one from wherever the first left you.
     const me = strikerOf(m, p.id);
     m.chances -= 1;
-    if (!p.armed) {
-      if (me.inPill) {
-        p.armed = true; sum.pilled = true; m.chances = Math.min(CHANCES, m.chances + 1);
-        sum.continues = m.chances > 0;
-        sum.note = 'In the pill — you are chot-ready.';
+    const hit = ev.firstContact && m.marbles.find((x) => x.id === ev.firstContact);
+    const chot = hit && hit.striker && hit.owner !== p.id;
+
+    if (chot && p.needsHole) {
+      sum.continues = m.chances > 0;
+      sum.note = `No count — go through the hole first. ${p.points}.`;
+    } else if (chot) {
+      p.points += CHOT_POINTS;
+      // (Tried docking the victim ten as well, to stop this being a pure race. Measured: it
+      // doubled game length to over a hundred shots and did nothing at all for the first-mover
+      // edge. Dropped.)
+      p.needsHole = true;                       // now back to the hole before the next one counts
+      m.chances = Math.min(CHANCES, m.chances + 1);
+      sum.gained = CHOT_POINTS; sum.chot = hit.owner;
+      sum.continues = m.chances > 0;
+      sum.note = p.points >= m.target
+        ? `${p.points}! Now sink it in the hole.`
+        : `Chot — ${p.points}. Back through the hole.`;
+    } else if (me.inPill) {
+      if (p.points >= m.target) {
+        sum.finished = true; sum.continues = false;
+        sum.note = 'In the hole at a hundred. Game.';
       } else {
-        sum.continues = m.chances > 0;
-        sum.note = sum.continues
-          ? `Missed the pill — ${m.chances} chance${m.chances > 1 ? 's' : ''} left, shoot from where it lies.`
-          : 'Out of chances.';
+        // The hole is a staging post: central, everything is nearer from it, and nothing can
+        // knock you out of it. Paid for with the shot it took to get there.
+        p.needsHole = false;
+        m.chances = Math.min(CHANCES, m.chances + 1);
+        sum.pilled = true; sum.continues = m.chances > 0;
+        sum.note = `Through the hole — hunting again, ${p.points} so far.`;
       }
-    } else if (ev.firstContact) {
-      const hit = m.marbles.find((x) => x.id === ev.firstContact);
-      if (hit && hit.owner !== null && hit.owner !== p.id) {
-        const victim = m.players[hit.owner];
-        const take = 1 + Math.min(CHOT_BONUS, Math.max(0, victim.stash));
-        victim.stash -= take - 1; p.stash += take; p.won += take;
-        hit.captured = true;
-        m.marbles = m.marbles.filter((x) => x.id !== hit.id);
-        sum.gained = take; sum.chot = victim.id; m.chances = Math.min(CHANCES, m.chances + 1);
-        sum.continues = m.chances > 0;
-        sum.note = `Chot on ${victim.name} — ${take} marbles.`;
-      } else { sum.continues = m.chances > 0; sum.note = 'Hit your own.'; }
     } else {
       sum.continues = m.chances > 0;
       sum.note = sum.continues ? `No chot — ${m.chances} left.` : 'No chot. Turn over.';
@@ -215,7 +243,10 @@ export function applyShot(m, shot) {
 
   if (sum.continues && m.turnShots >= TURN_SHOTS) { sum.continues = false; sum.note += ' Turn over.'; }
   if (!sum.continues) {
-    respot(m, p.id); m.turn = (m.turn + 1) % m.players.length;
+    // In Pill Chot your marble stays on the patch between turns -- it is a target, and that
+    // exposure is the game. Only Chakri walks the striker back behind the line.
+    if (m.mode === 'chakri') respot(m, p.id);
+    m.turn = (m.turn + 1) % m.players.length;
     m.chances = CHANCES; m.turnShots = 0;
   }
   checkOver(m);
@@ -240,12 +271,13 @@ function payFoul(m, p, sum) {
 }
 
 function checkOver(m) {
-  if (m.players.some((p) => p.stash <= 0)) return finish(m);   // cleaned out: pockets empty
   if (m.mode === 'chakri') {
+    if (m.players.some((p) => p.stash <= 0)) return finish(m);   // cleaned out: pockets empty
     if (m.pot <= 0 || potMarbles(m).length === 0) finish(m);
   } else {
-    const broke = m.players.some((p) => fieldMarblesOf(m, p.id).length === 0);
-    if (broke) finish(m);
+    // A hundred is not enough on its own -- it has to be sunk.
+    const done = m.players.find((p) => p.points >= m.target && strikerOf(m, p.id).inPill);
+    if (done) { m.phase = 'over'; m.winner = done.id; }
   }
 }
 function finish(m) {
