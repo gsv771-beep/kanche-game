@@ -77,16 +77,20 @@ export function attachInput(canvas, api) {
   canvas.addEventListener('pointerdown', (e) => {
     if (!api.isActive() || id !== null) return;
     id = e.pointerId; p0 = p = pt(e); t0 = performance.now();
-    canvas.setPointerCapture(id);
+    // Capture can throw if the pointer is already gone; never let that skip the rest.
+    try { canvas.setPointerCapture(id); } catch {}
     e.preventDefault();
     api.onAim(aimNow());
   });
 
-  canvas.addEventListener('pointermove', (e) => {
+  // Move and release listen on the WINDOW, not the canvas. Pulling back from a marble sitting
+  // near the bottom of the board runs your thumb straight off the canvas and onto the footer
+  // within about 60px -- on the canvas alone the drag would silently stop tracking there.
+  addEventListener('pointermove', (e) => {
     if (e.pointerId !== id) return;
     p = pt(e); e.preventDefault();
     api.onAim(aimNow());
-  });
+  }, { passive: false });
 
   const release = (e) => {
     if (e.pointerId !== id) return;
@@ -96,8 +100,8 @@ export function attachInput(canvas, api) {
     if (!a || a.power < 0.04) return;         // a tap is not a shot
     api.onShoot({ angle: a.angle, power: a.power, steady: a.steady, foul: a.power > FOUL_AT });
   };
-  canvas.addEventListener('pointerup', release);
-  canvas.addEventListener('pointercancel', (e) => { if (e.pointerId === id) { id = null; p0 = p = null; api.onAim(null); } });
+  addEventListener('pointerup', release);
+  addEventListener('pointercancel', (e) => { if (e.pointerId === id) { id = null; p0 = p = null; api.onAim(null); } });
 
   // iOS: kill pinch/double-tap zoom over the board outright
   ['gesturestart', 'gesturechange', 'touchmove'].forEach((n) =>

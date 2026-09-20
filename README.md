@@ -24,6 +24,30 @@ There is nothing to build; a non-empty build command is the usual way this deplo
 
 ## The shot
 
+Two control schemes. **Buttons are the default**, because the first build shipped with the drag
+gesture alone and the first person to try it on a phone could not take a single shot -- nothing
+appears on screen until you have already guessed the right gesture, which is not a control
+scheme, it is a riddle.
+
+### Buttons (default)
+
+`◀` `▶` aim -- tap to nudge, hold to sweep. A yellow arrow and the predicted path are on screen
+the whole time, so there is never a moment where the game is not telling you what it will do.
+
+`SHOOT` runs the three-tap meter, the golf/Stick Cricket pattern that is decades old because it
+works:
+
+| tap | what it sets |
+|---|---|
+| 1 — SHOOT | the marker starts sweeping the bar |
+| 2 — POWER | locks how hard you hit; the marker turns and runs back, faster |
+| 3 — RELEASE | tap inside the green band for a true line; miss it and the shot pulls, up to 7° |
+
+Two decisions, one button, every piece of state visible. Nothing is hidden and nothing depends
+on knowing a gesture.
+
+### Drag (optional)
+
 One gesture carries all three things a real flick carries: line, power, and a clean release.
 
 **Press anywhere in the lower half and drag back.** Not on the marble — on a phone your thumb

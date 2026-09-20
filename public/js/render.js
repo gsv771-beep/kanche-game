@@ -155,6 +155,25 @@ export function draw(view) {
 
 function drawAim(a) {
   const px = sx(a.x), py = sy(a.y);
+
+  // The arrow is drawn in BOTH schemes and whenever it is your shot -- not only mid-drag.
+  // A board that shows nothing until you guess the right gesture is a board nobody can play.
+  const L = Math.max(scale * 0.10, scale * 0.10 + a.power * scale * 0.22);
+  const ax = px + Math.cos(a.angle) * L, ay = py + Math.sin(a.angle) * L;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,212,82,0.95)'; ctx.lineWidth = Math.max(2.5, scale * 0.007); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(px + Math.cos(a.angle) * scale * 0.035, py + Math.sin(a.angle) * scale * 0.035);
+  ctx.lineTo(ax, ay); ctx.stroke();
+  const h = Math.max(7, scale * 0.022);
+  ctx.fillStyle = 'rgba(255,212,82,0.95)';
+  ctx.beginPath();
+  ctx.moveTo(ax + Math.cos(a.angle) * h, ay + Math.sin(a.angle) * h);
+  ctx.lineTo(ax + Math.cos(a.angle + 2.5) * h, ay + Math.sin(a.angle + 2.5) * h);
+  ctx.lineTo(ax + Math.cos(a.angle - 2.5) * h, ay + Math.sin(a.angle - 2.5) * h);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  if (a.kind === 'buttons') return;   // power and release live on the DOM meter instead
   // Steadiness ring: wide on touch, tight at the settle, shaking again if you dither.
   const rr = a.steady * scale;
   ctx.save();

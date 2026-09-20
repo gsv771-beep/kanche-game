@@ -2,7 +2,8 @@
 import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, MODES } from './rules.js';
 import { chooseShot, thinkTime, LEVELS } from './bot.js';
 import * as R from './render.js';
-import { attachInput, spreadFor } from './input.js';
+import { attachInput, spreadFor, predictPath } from './input.js';
+import * as C from './controls.js';
 import * as A from './audio.js';
 import { mountAvatar, setAvatarState, AVATARS } from './avatars.js';
 import { say, summaryLine } from './strings.js';
@@ -19,6 +20,9 @@ const store = {
 
 let pick = { mode: 'chakri', bot: 'bunty', striker: 'goli' };
 let match = null, r = null, phase = 'idle', aim = null, fromLine = false, used = new Set();
+const ctl = C.createControls();
+let held = 0;                                   // an aim arrow being held down
+let scheme = store.get('scheme', 'buttons');    // buttons by default: it cannot fail to be found
 let play = null;          // { before, frames, events, summary, i, dinged:Set }
 let botPreview = null;    // the opponent's wandering aim line while it thinks
 const canvas = $('#board');
@@ -38,6 +42,37 @@ $('#btn-menu').onclick = () => show('screen-setup');
 $('#btn-mute').onclick = () => { A.setMuted(!A.isMuted()); $('#btn-mute').textContent = A.isMuted() ? '🔇' : '🔊'; };
 $('#btn-line').onclick = () => { fromLine = true; $('#btn-line').hidden = true; msg('From the line. Your shot.'); };
 
+/* ---------------- button controls ---------------- */
+const myTurn = () => phase === 'aim' && match && current(match).kind === 'human';
+function holdPad(id, dir) {
+  const el = $(id);
+  const down = (e) => { if (!myTurn()) return; e.preventDefault(); A.unlock(); held = dir; C.nudge(ctl, dir); };
+  const up = () => { held = 0; };
+  el.addEventListener('pointerdown', down);
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((n) => el.addEventListener(n, up));
+}
+holdPad('#pad-l', -1); holdPad('#pad-r', 1);
+$('#pad-go').addEventListener('pointerdown', (e) => {
+  e.preventDefault(); A.unlock();
+  if (!myTurn()) return;
+  const shot = C.press(ctl, performance.now());
+  if (!shot) return;
+  // The release error is drawn from the match RNG so the shot record still replays exactly.
+  const err = r.normal(0, shot.missed * C.MAX_PULL);
+  A.flick(shot.power);
+  fire({ angle: ctl.angle + err, power: shot.power, foul: shot.power > 0.92, fromLine });
+  fromLine = false;
+});
+$('#btn-scheme').onclick = () => {
+  scheme = scheme === 'buttons' ? 'drag' : 'buttons';
+  store.set('scheme', scheme); C.cancel(ctl); applyScheme();
+};
+function applyScheme() {
+  document.body.classList.toggle('scheme-drag', scheme === 'drag');
+  $('#btn-scheme').textContent = scheme === 'buttons' ? 'Switch to drag aiming' : 'Switch to buttons';
+  if (scheme === 'drag') msg('Press anywhere on the board and drag back. Release when the ring is tight.');
+}
+
 /* ---------------- match ---------------- */
 function start() {
   const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
@@ -53,13 +88,17 @@ function start() {
     ],
   });
   phase = 'aim'; fromLine = false; play = null; aim = null; botPreview = null;
+  ctl.angle = -Math.PI / 2; C.cancel(ctl); applyScheme();
   $('#bot-name').textContent = match.players[1].name;
   $('#pot-lbl').textContent = match.mode === 'pill' ? 'ON FIELD' : 'POT';
   mountAvatar($('#ava-wrap'), pick.bot, 'idle');
   bubble(say(pick.bot, 'start', r, used));
+  $('#a2hs').hidden = true;      // never let the hint sit over the board
   show('screen-game');
   R.resize(); hud();
-  msg(match.mode === 'pill' ? 'Land your striker in the pill first.' : 'Drag back to aim. Release when the ring is tight.');
+  msg(match.mode === 'pill' ? 'Land your striker in the pill first.'
+    : scheme === 'buttons' ? 'Aim with ◀ ▶, then SHOOT: tap for power, tap again in the green.'
+    : 'Press anywhere on the board and drag back. Release when the ring is tight.');
   if (current(match).kind === 'bot') botTurn();
 }
 
@@ -77,12 +116,12 @@ const originFor = (pid) => {
 };
 
 const input = attachInput(canvas, {
-  isActive: () => phase === 'aim' && match && current(match).kind === 'human',
+  isActive: () => myTurn() && scheme === 'drag',
   origin: () => originFor(0),
   strikerId: () => strikerId(0),
   marbles: () => match.marbles,
   assist,
-  onAim: (a) => { aim = a; },
+  onAim: (a) => { aim = a; if (a) ctl.angle = a.angle; },
   onShoot: (s) => {
     // The release error is drawn from the match RNG, so the shot record replays exactly.
     const err = r.normal(0, spreadFor(s.steady));
@@ -189,12 +228,23 @@ function frame(now) {
       if (play.i >= play.frames.length - 1) settle();
     } else {
       positions = match.marbles.map((m) => ({ ...m }));
+      if (!a && myTurn() && scheme === 'buttons') {
+        // Always show where the marble is pointing. Nothing on screen until you guess the right
+        // gesture is what made the first build unplayable.
+        const o = originFor(0);
+        const pw = ctl.stage === 'power' ? ctl.marker : (ctl.power || 0.45);
+        a = { kind: 'buttons', x: o.x, y: o.y, angle: ctl.angle, power: pw,
+              path: predictPath(match.marbles, o, ctl.angle, pw, strikerId(0), assist()) };
+      }
       if (phase === 'bot' && botPreview) {
         const s = strikerOf(match, 1);
         const wob = Math.sin((now - botPreview.t0) / 220) * 0.13;
         a = { preview: true, path: pathFrom(s, botPreview.angle + wob, botPreview.power) };
       }
     }
+    if (held && myTurn()) C.sweep(ctl, held, dt);
+    C.tick(ctl, now);
+    meter();
     input.tick();
     R.draw({ match, positions, aim: a });
   }
@@ -223,6 +273,22 @@ function bubble(text) {
 }
 const msg = (t) => { $('#msg').textContent = t; };
 
+function meter() {
+  const m = $('#meter'), live = ctl.stage !== 'idle';
+  m.classList.toggle('is-live', live);
+  m.classList.toggle('is-acc', ctl.stage === 'accuracy' || ctl.stage === 'late');
+  $('#meter-mark').style.left = `calc(${(Math.max(0, Math.min(1, ctl.marker)) * 100).toFixed(1)}% - 2px)`;
+  $('#meter-fill').style.width = `${((ctl.stage === 'power' ? ctl.marker : ctl.power) * 100).toFixed(1)}%`;
+  $('#meter-band').style.width = `${(C.bandWidth * 100).toFixed(1)}%`;
+  $('#pad-go').classList.toggle('is-arm', C.inBand(ctl));
+  $('#meter-lbl').textContent = !myTurn() ? '—'
+    : ctl.stage === 'idle' ? 'TAP SHOOT'
+    : ctl.stage === 'power' ? 'TAP TO SET POWER'
+    : 'TAP IN THE GREEN';
+  $('#pad-go').textContent = ctl.stage === 'idle' ? 'SHOOT' : ctl.stage === 'power' ? 'POWER' : 'RELEASE';
+  [$('#pad-l'), $('#pad-r')].forEach((b) => { b.disabled = !myTurn() || ctl.stage !== 'idle'; });
+}
+
 R.setup(canvas);
 addEventListener('resize', () => R.resize());
 addEventListener('orientationchange', () => setTimeout(() => R.resize(), 250));
@@ -231,6 +297,11 @@ addEventListener('orientationchange', () => setTimeout(() => R.resize(), 250));
 // iOS never offers to install a web app, so we ask once -- it is the only way to lose the URL bar.
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 if (isIOS && !navigator.standalone && !store.get('a2hs', false)) {
-  setTimeout(() => { $('#a2hs').hidden = false; }, 6000);
+  // Only on the setup screen, and never over the board: it is a nice-to-have, and a nice-to-have
+  // must never be in front of the controls. It also gives up on its own.
+  setTimeout(() => {
+    if ($('#screen-setup').classList.contains('is-on')) $('#a2hs').hidden = false;
+    setTimeout(() => { $('#a2hs').hidden = true; }, 12000);
+  }, 3500);
   $('#a2hs-x').onclick = () => { $('#a2hs').hidden = true; store.set('a2hs', true); };
 }

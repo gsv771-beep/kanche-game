@@ -79,10 +79,25 @@
 
   <canvas id="board"></canvas>
 
-  <footer class="bar">
+  <div class="msgrow">
     <button id="btn-mute" class="icon-btn" aria-label="Sound">🔊</button>
     <div class="msg" id="msg">Your shot.</div>
     <button id="btn-line" class="chip" hidden>Take the line</button>
+  </div>
+
+  <footer class="bar" id="controls">
+    <div class="meter" id="meter" aria-hidden="true">
+      <div class="meter-band" id="meter-band"></div>
+      <div class="meter-fill" id="meter-fill"></div>
+      <div class="meter-mark" id="meter-mark"></div>
+      <span class="meter-lbl" id="meter-lbl">Tap SHOOT</span>
+    </div>
+    <div class="pads">
+      <button class="pad" id="pad-l" aria-label="Aim left">◀</button>
+      <button class="pad pad-go" id="pad-go">SHOOT</button>
+      <button class="pad" id="pad-r" aria-label="Aim right">▶</button>
+    </div>
+    <button class="swap" id="btn-scheme">Switch to drag aiming</button>
   </footer>
   <div class="turn-flag" id="turn-flag" hidden></div>
 </section>
