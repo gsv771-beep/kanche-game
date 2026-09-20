@@ -34,6 +34,23 @@ const MAX_TIME = 9.0;
 
 export const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 
+/**
+ * The power, 0..1, needed to knock `target` clear of the ring with a square hit from (fx, fy).
+ * The same arithmetic the bot aims with -- it belongs on screen too. Without it the player has
+ * no way to know that a shot which visibly HITS can still be too weak to score, which reads as
+ * the game being broken rather than as the shot being soft.
+ */
+export function powerToClear(striker, target, ringR, fx, fy) {
+  const spec = STRIKERS[striker.striker] || STRIKERS.goli;
+  const dc = Math.hypot(target.x, target.y);
+  const travel = Math.max(0.01, ringR + target.r - dc + 0.02);
+  const vT = Math.sqrt(2 * target.decel * travel);
+  const K = ((1 + RESTITUTION) * striker.mass) / (striker.mass + target.mass);
+  const vImpact = vT / Math.max(K, 0.05);
+  const L = dist(fx, fy, target.x, target.y);
+  return Math.sqrt(vImpact * vImpact + 2 * spec.decel * L) / spec.maxSpeed;
+}
+
 /** A marble in play. `owner` is the player index that staked it; null for the pot. */
 export function marble(id, x, y, opts = {}) {
   const spec = opts.striker ? STRIKERS[opts.striker] : POT_MARBLE;

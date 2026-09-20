@@ -113,6 +113,13 @@ body{
 /* the three-tap meter */
 .meter{position:relative;height:30px;border-radius:9px;background:rgba(0,0,0,.34);
   border:1.5px solid var(--line);overflow:hidden;margin-bottom:9px}
+/* The two zones that were invisible and made the game feel broken: below the first tick a shot
+   HITS but cannot push anything over the line, and above the second one the thumb lifts. */
+.meter-weak{position:absolute;left:0;top:0;bottom:0;width:0;background:repeating-linear-gradient(
+  45deg,rgba(0,0,0,.34) 0 6px,rgba(255,255,255,.05) 6px 12px);border-right:2px solid rgba(243,238,226,.5)}
+.meter-foul{position:absolute;right:0;top:0;bottom:0;width:3%;background:rgba(224,108,90,.45);
+  border-left:2px solid var(--red)}
+.meter.is-acc .meter-weak,.meter.is-acc .meter-foul{opacity:0}
 .meter-band{position:absolute;left:0;top:0;bottom:0;width:15%;background:rgba(142,208,129,.32);
   border-right:2px solid var(--green);opacity:0;transition:opacity .12s}
 .meter.is-acc .meter-band{opacity:1}

@@ -2,13 +2,13 @@
 import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, CHANCES } from './rules.js';
 import { chooseShot, thinkTime, LEVELS } from './bot.js';
 import * as R from './render.js';
-import { attachInput, predictPath } from './input.js';
+import { attachInput, predictPath, firstOnLine } from './input.js';
 import * as C from './controls.js';
 import * as A from './audio.js';
 import { mountAvatar, setAvatarState, AVATARS } from './avatars.js';
 import { say, summaryLine } from './strings.js';
 import { rng } from './rng.js';
-import { SHOOT_LINE, dist } from './physics.js';
+import { SHOOT_LINE, dist, powerToClear } from './physics.js';
 
 const $ = (s) => document.querySelector(s);
 const show = (id) => document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('is-on', s.id === id));
@@ -21,6 +21,8 @@ const store = {
 let pick = { mode: 'chakri', bot: 'bunty', striker: 'goli' };
 let match = null, r = null, phase = 'idle', fromLine = false, used = new Set();
 const ctl = C.createControls();
+const FOUL_AT = 0.97;   // was 0.92, which made the top of the bar a trap rather than a choice
+let needPower = 0;      // power the shot on this line actually requires, shown on the meter
 let held = 0;        // an aim arrow being held down
 let dragging = false;
 let play = null;          // { before, frames, events, summary, i, dinged:Set }
@@ -60,7 +62,7 @@ $('#pad-go').addEventListener('pointerdown', (e) => {
   // The release error is drawn from the match RNG so the shot record still replays exactly.
   const err = r.normal(0, shot.missed * C.MAX_PULL);
   A.flick(shot.power);
-  fire({ angle: ctl.angle + err, power: shot.power, foul: shot.power > 0.92, fromLine });
+  fire({ angle: ctl.angle + err, power: shot.power, foul: shot.power > FOUL_AT, fromLine });
   fromLine = false;
 });
 
@@ -80,20 +82,33 @@ function start() {
     ],
   });
   phase = 'aim'; fromLine = false; play = null; botPreview = null;
-  ctl.angle = -Math.PI / 2; C.cancel(ctl);
+  C.cancel(ctl);
   $('#bot-name').textContent = match.players[1].name;
   $('#pot-lbl').textContent = match.mode === 'pill' ? 'ON FIELD' : 'POT';
   mountAvatar($('#ava-wrap'), pick.bot, 'idle');
   bubble(say(pick.bot, 'start', r, used));
   $('#a2hs').hidden = true;      // never let the hint sit over the board
   show('screen-game');
-  R.resize(); hud();
+  R.resize(); hud(); defaultAim();
   msg(match.mode === 'pill' ? 'Land your striker in the pill first.'
     : 'Touch the board to aim, then SHOOT.');
   if (current(match).kind === 'bot') botTurn();
 }
 
 const assist = () => (store.get('wins', 0) >= 3 ? 0.55 : 1);
+
+/** Point the striker at something. The opening aim used to be straight up while the striker
+ *  starts off-centre, so tapping SHOOT without aiming missed the pile entirely. */
+function defaultAim() {
+  const o = originFor(0);
+  const near = (list) => list.length
+    ? list.reduce((a, b) => (dist(o.x, o.y, a.x, a.y) <= dist(o.x, o.y, b.x, b.y) ? a : b))
+    : { x: 0, y: 0 };
+  const t = match.mode === 'pill'
+    ? (match.players[0].armed ? near(match.marbles.filter((x) => !x.striker && x.owner !== 0)) : { x: 0, y: 0 })
+    : near(match.marbles.filter((x) => !x.striker && !x.out));
+  ctl.angle = Math.atan2(t.y - o.y, t.x - o.x);
+}
 
 /* ---------------- input ---------------- */
 const originFor = (pid) => {
@@ -137,6 +152,7 @@ function botTurn() {
 /* ---------------- settle ---------------- */
 function settle() {
   const { summary: sum } = play;
+  const turnChanged = !sum.continues;
   const bot = match.players[1];
   const mine = sum.by === 0;
   if (sum.gained > 0) A.ding();
@@ -156,6 +172,7 @@ function settle() {
   const cur = current(match);
   if (cur.kind === 'bot') return setTimeout(botTurn, 650);
   phase = 'aim';
+  if (turnChanged) defaultAim();
   // Offer the walk back to the line whenever the striker is lying inside the ring.
   const s = strikerOf(match, 0);
   $('#btn-line').hidden = !(match.mode === 'chakri' && dist(s.x, s.y, 0, 0) <= match.ringR + s.r);
@@ -215,6 +232,9 @@ function frame(now) {
         // gesture is what made the first build unplayable.
         const o = originFor(0);
         const pw = ctl.stage === 'power' ? ctl.marker : (ctl.power || 0.45);
+        const tgt = firstOnLine(match.marbles, o, ctl.angle, strikerId(0));
+        needPower = (tgt && match.mode === 'chakri')
+          ? Math.min(1, powerToClear(strikerOf(match, 0), tgt, match.ringR, o.x, o.y)) : 0;
         a = { kind: 'buttons', x: o.x, y: o.y, angle: ctl.angle, power: pw, dragging,
               path: predictPath(match.marbles, o, ctl.angle, pw, strikerId(0), assist()) };
       }
@@ -266,10 +286,13 @@ function meter() {
   $('#meter-mark').style.left = `calc(${(Math.max(0, Math.min(1, ctl.marker)) * 100).toFixed(1)}% - 2px)`;
   $('#meter-fill').style.width = `${((ctl.stage === 'power' ? ctl.marker : ctl.power) * 100).toFixed(1)}%`;
   $('#meter-band').style.width = `${(C.bandWidth * 100).toFixed(1)}%`;
+  $('#meter-weak').style.width = `${(needPower * 100).toFixed(1)}%`;
+  $('#meter-foul').style.width = `${((1 - FOUL_AT) * 100).toFixed(1)}%`;
   $('#pad-go').classList.toggle('is-arm', C.inBand(ctl));
   $('#meter-lbl').textContent = !myTurn() ? '—'
     : ctl.stage === 'idle' ? 'TAP SHOOT'
-    : ctl.stage === 'power' ? 'TAP TO SET POWER'
+    : ctl.stage === 'power'
+        ? (ctl.marker > FOUL_AT ? 'TOO HARD — FOUL' : ctl.marker < needPower ? 'TOO SOFT TO CLEAR' : 'TAP TO SET POWER')
     : 'TAP IN THE GREEN';
   $('#pad-go').textContent = ctl.stage === 'idle' ? 'SHOOT' : ctl.stage === 'power' ? 'POWER' : 'RELEASE';
   [$('#pad-l'), $('#pad-r')].forEach((b) => { b.disabled = !myTurn() || ctl.stage !== 'idle'; });

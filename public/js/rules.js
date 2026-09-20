@@ -137,8 +137,8 @@ export function applyShot(m, shot) {
       m.chances -= 1;
       sum.continues = m.chances > 0;
       sum.note = sum.continues
-        ? `${ev.firstContact ? 'Touched, nothing out' : 'Missed'} — ${m.chances} chance${m.chances > 1 ? 's' : ''} left.`
-        : 'Chances used up.';
+        ? `${ev.firstContact ? 'Hit it — not hard enough to cross the line' : 'Missed'} — ${m.chances} chance${m.chances > 1 ? 's' : ''} left.`
+        : ev.firstContact ? 'Hit it, but never hard enough. Turn over.' : 'Chances used up.';
     }
     // The striker-in-ring forfeit is judged when the TURN ends, not on every miss -- otherwise
     // the chances rule and the forfeit rule contradict each other and a miss inside the ring
@@ -150,10 +150,21 @@ export function applyShot(m, shot) {
     }
     sum.chancesLeft = m.chances;
   } else {
+    // The hole mode gets chances too -- this is the one the rule was asked for. Miss the pill
+    // and your striker stays where it stopped; you shoot again from there, which is the whole
+    // point: the second shot is a short, awkward one from wherever the first left you.
     const me = strikerOf(m, p.id);
     if (!p.armed) {
-      if (me.inPill) { p.armed = true; sum.pilled = true; sum.continues = true; sum.note = 'In the pill — you are chot-ready.'; }
-      else sum.note = 'Missed the pill.';
+      if (me.inPill) {
+        p.armed = true; sum.pilled = true; sum.continues = true; m.chances = CHANCES;
+        sum.note = 'In the pill — you are chot-ready.';
+      } else {
+        m.chances -= 1;
+        sum.continues = m.chances > 0;
+        sum.note = sum.continues
+          ? `Missed the pill — ${m.chances} chance${m.chances > 1 ? 's' : ''} left, shoot from where it lies.`
+          : 'Out of chances.';
+      }
     } else if (ev.firstContact) {
       const hit = m.marbles.find((x) => x.id === ev.firstContact);
       if (hit && hit.owner !== null && hit.owner !== p.id) {
@@ -162,10 +173,15 @@ export function applyShot(m, shot) {
         victim.stash -= take - 1; p.stash += take; p.won += take;
         hit.captured = true;
         m.marbles = m.marbles.filter((x) => x.id !== hit.id);
-        sum.gained = take; sum.chot = victim.id; sum.continues = true;
+        sum.gained = take; sum.chot = victim.id; sum.continues = true; m.chances = CHANCES;
         sum.note = `Chot on ${victim.name} — ${take} marbles.`;
-      } else sum.note = 'Hit your own. Turn passes.';
-    } else sum.note = 'No chot.';
+      } else { m.chances -= 1; sum.continues = m.chances > 0; sum.note = 'Hit your own.'; }
+    } else {
+      m.chances -= 1;
+      sum.continues = m.chances > 0;
+      sum.note = sum.continues ? `No chot — ${m.chances} left.` : 'No chot. Turn over.';
+    }
+    sum.chancesLeft = m.chances;
   }
 
   if (!sum.continues) { respot(m, p.id); m.turn = (m.turn + 1) % m.players.length; m.chances = CHANCES; }

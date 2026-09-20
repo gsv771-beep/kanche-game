@@ -18,7 +18,7 @@
 // failure has to put itself on the screen or it is invisible -- and an invisible failure is
 // indistinguishable from "it isn't showing".
 (function () {
-  window.KANCHE_BUILD = 'b6';
+  window.KANCHE_BUILD = 'b7';
   var shown = false;
   function bail(what, detail) {
     if (shown) return; shown = true;
@@ -122,6 +122,8 @@
 
   <footer class="bar" id="controls">
     <div class="meter" id="meter" aria-hidden="true">
+      <div class="meter-weak" id="meter-weak"></div>
+      <div class="meter-foul" id="meter-foul"></div>
       <div class="meter-band" id="meter-band"></div>
       <div class="meter-fill" id="meter-fill"></div>
       <div class="meter-mark" id="meter-mark"></div>

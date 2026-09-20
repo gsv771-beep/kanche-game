@@ -30,6 +30,20 @@ export function predictPath(marbles, origin, angle, power, strikerId, assist = 1
   return pts;
 }
 
+/** The first marble the aim line runs into -- the one the power guidance is about. */
+export function firstOnLine(marbles, origin, angle, strikerId) {
+  const me = marbles.find((m) => m.id === strikerId);
+  const ux = Math.cos(angle), uy = Math.sin(angle);
+  for (let d = 0.012; d <= 2.2; d += 0.012) {
+    const x = origin.x + ux * d, y = origin.y + uy * d;
+    for (const o of marbles) {
+      if (o.id === strikerId || o.out || o.inPill) continue;
+      if (dist(x, y, o.x, o.y) < o.r + (me?.r || 0.014)) return o;
+    }
+  }
+  return null;
+}
+
 /**
  * @param canvas
  * @param api { isActive, origin, onAngle(rad), onDragging(bool) }

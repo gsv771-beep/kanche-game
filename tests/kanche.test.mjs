@@ -1,8 +1,8 @@
 // Kanche: physics, rules and the bot ladder. Run: node tests/kanche.test.mjs
-import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, dist } from '../public/js/physics.js';
+import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, dist, powerToClear } from '../public/js/physics.js';
 import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES } from '../public/js/rules.js';
 import { chooseShot, LEVELS } from '../public/js/bot.js';
-import { predictPath } from '../public/js/input.js';
+import { predictPath, firstOnLine } from '../public/js/input.js';
 import * as C from '../public/js/controls.js';
 import { rng } from '../public/js/rng.js';
 
@@ -219,6 +219,53 @@ const board = () => [
   ok('and every match reaches an end', u.finished === 12);
   const b = played('bunty', 'chotu', 12);
   ok('the mohalla champ beats the gully kid', b.wins >= 7, `${b.wins}/12`);
+}
+
+// ---------- the power a shot actually needs ----------
+{
+  // The reported bug: a shot that visibly HITS still scores nothing, with nothing on screen
+  // saying why. The guidance the meter draws has to agree with what the simulator does.
+  const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, players: [{ name: 'A' }, { name: 'B' }] });
+  const s = strikerOf(m, 0);
+  const aim = Math.atan2(-s.y, -s.x);
+  const tgt = firstOnLine(m.marbles, { x: s.x, y: s.y }, aim, 's0');
+  ok('the aim line finds the marble it will actually hit', !!tgt && !tgt.striker);
+  const need = powerToClear(s, tgt, m.ringR, s.x, s.y);
+  ok('the required power is a sane fraction of the bar', need > 0.2 && need < 1, need.toFixed(2));
+
+  const outs = (pw) => simulate(m.marbles, { id: 's0', angle: aim, power: pw }, { ringR: m.ringR }).events.knockedOut.length;
+  ok('below the mark nothing clears the line', outs(Math.max(0.05, need - 0.18)) === 0);
+  ok('at the mark, or just past it, something does', outs(Math.min(0.99, need + 0.1)) > 0,
+    `need ${need.toFixed(2)}`);
+  // There is a real band between "reaches the pile" and "clears the line": the shot connects,
+  // nothing goes out, and that is exactly what read as the game being broken.
+  ok('just under the mark the shot connects but scores nothing', (() => {
+    const ev = simulate(m.marbles, { id: 's0', angle: aim, power: need - 0.06 }, { ringR: m.ringR }).events;
+    return !!ev.firstContact && ev.knockedOut.length === 0;
+  })(), `need ${need.toFixed(2)}`);
+  ok('and well under it the striker does not even arrive', (() => {
+    const ev = simulate(m.marbles, { id: 's0', angle: aim, power: Math.max(0.05, need - 0.25) }, { ringR: m.ringR }).events;
+    return !ev.firstContact;
+  })());
+}
+
+// ---------- chances in the hole mode ----------
+{
+  const m = newMatch({ seed: 17, mode: 'pill', ante: 3, players: [{ name: 'A' }, { name: 'B' }] });
+  ok('the hole mode opens with a full set of chances too', m.chances === CHANCES);
+  const away = { angle: 0.3, power: 0.05 };
+  const a = applyShot(m, away);
+  ok('missing the pill costs a chance, not the turn', m.turn === 0 && a.summary.continues && m.chances === CHANCES - 1);
+  const sx = strikerOf(m, 0).x, sy = strikerOf(m, 0).y;
+  ok('and the striker stays where it stopped', Math.abs(strikerOf(m, 0).x - sx) < 1e-9 && Math.abs(strikerOf(m, 0).y - sy) < 1e-9);
+  for (let i = 0; i < CHANCES - 1; i++) applyShot(m, away);
+  ok('the turn passes once they are used up', m.turn === 1 && m.chances === CHANCES);
+
+  const n = newMatch({ seed: 17, mode: 'pill', ante: 3, players: [{ name: 'A' }, { name: 'B' }] });
+  applyShot(n, away);
+  const s = strikerOf(n, 0); s.x = 0; s.y = 0.16;
+  applyShot(n, { angle: -Math.PI / 2, power: 0.30 });
+  ok('landing in the pill arms you and refills the chances', n.players[0].armed && n.chances === CHANCES);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll Kanche tests passed');
