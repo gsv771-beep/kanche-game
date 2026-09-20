@@ -1,5 +1,5 @@
 // Wiring. Owns the screens, the turn loop and the playback of a settled shot.
-import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, CHANCES, TURN_SHOTS, shotsLeft } from './rules.js';
+import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, CHANCES, TURN_SHOTS, shotsLeft, lagWinner, lineUp } from './rules.js';
 import { chooseShot, thinkTime, LEVELS } from './bot.js';
 import * as R from './render.js';
 import { attachInput, predictPath, firstOnLine } from './input.js';
@@ -8,7 +8,7 @@ import * as A from './audio.js';
 import { mountAvatar, setAvatarState, AVATARS } from './avatars.js';
 import { say, summaryLine } from './strings.js';
 import { rng } from './rng.js';
-import { SHOOT_LINE, dist, powerToClear } from './physics.js';
+import { SHOOT_LINE, dist, powerToClear, simulate } from './physics.js';
 
 const $ = (s) => document.querySelector(s);
 const show = (id) => document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('is-on', s.id === id));
@@ -27,6 +27,8 @@ const FOUL_AT = 0.97;   // was 0.92, which made the top of the bar a trap rather
 let needPower = 0;      // power the shot on this line actually requires, shown on the meter
 let held = 0;        // an aim arrow being held down
 let dragging = false;
+let lagging = false; // the pre-game throw for turn order
+let lagDist = [];
 let play = null;          // { before, frames, events, summary, i, dinged:Set }
 let botPreview = null;    // the opponent's wandering aim line while it thinks
 const canvas = $('#board');
@@ -40,9 +42,21 @@ function sel(group, btn, fn) {
   fn(); A.unlock();
 }
 document.querySelectorAll('#pick-bot .card').forEach((b) => { b.querySelector('.ava-box').innerHTML = AVATARS[b.dataset.bot]; });
-$('#btn-play').onclick = () => { A.unlock(); start(); };
-$('#btn-again').onclick = () => start();
-$('#btn-menu').onclick = () => show('screen-setup');
+$('#btn-play').onclick = () => { A.unlock(); startLag(); };
+$('#btn-again').onclick = () => startLag();
+let quitArmed = null;
+$('#btn-quit').onclick = () => {
+  const b = $('#btn-quit');
+  if (quitArmed) { clearTimeout(quitArmed); quitArmed = null; b.classList.remove('armed'); b.textContent = '✕'; return toMenu(); }
+  b.classList.add('armed'); b.textContent = 'Leave?';
+  quitArmed = setTimeout(() => { quitArmed = null; b.classList.remove('armed'); b.textContent = '✕'; }, 3000);
+};
+function toMenu() {
+  phase = 'idle'; play = null; botPreview = null; lagging = false; match = null;
+  window.__match = null; bubble(null);
+  show('screen-setup');
+}
+$('#btn-menu').onclick = () => toMenu();
 $('#btn-mute').onclick = () => { A.setMuted(!A.isMuted()); $('#btn-mute').textContent = A.isMuted() ? '🔇' : '🔊'; };
 $('#btn-line').onclick = () => { fromLine = true; $('#btn-line').hidden = true; msg('From the line. Your shot.'); };
 
@@ -69,8 +83,70 @@ $('#pad-go').addEventListener('pointerdown', (e) => {
 });
 
 
+/* ---------------- lagging ---------------- */
+/**
+ * Before the game, everyone throws at the hole from the line and the closest opens. It is how
+ * the street settles turn order, and it matters: between identical bots the opener wins 70-78%
+ * of matches, which is far too much for a coin to decide. A throw makes the advantage earned.
+ * It doubles as the tutorial -- your first shot of a session is a soft one at a big target.
+ */
+function startLag() {
+  const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+  r = rng(seed); used = new Set(); lagging = true; lagDist = [];
+  match = newMatch({ seed, mode: 'pill', first: 0, players: playerSpecs() });
+  lineUp(match);
+  // Both "owe the hole", which is exactly the shot a lag is -- and it makes the bot aim there.
+  match.players.forEach((p) => { p.needsHole = true; });
+  phase = 'aim'; fromLine = false; play = null; botPreview = null; window.__match = match;
+  C.cancel(ctl);
+  $('#bot-name').textContent = match.players[1].name;
+  mountAvatar($('#ava-wrap'), pick.bot, 'idle');
+  $('#a2hs').hidden = true;
+  show('screen-game');
+  R.resize(); hud(); defaultAim();
+  msg('Lag for first shot — get closest to the hole.');
+  if (current(match).kind === 'bot') botTurn();
+}
+
+function lagFire(shot) {
+  phase = 'anim'; botPreview = null;
+  const id = strikerId(match.turn);
+  const before = match.marbles.map((x) => ({ ...x }));
+  const res = simulate(match.marbles, { ...shot, id }, { ringR: match.ringR, pill: true });
+  match.marbles = res.marbles;
+  const me = match.marbles.find((x) => x.id === id);
+  lagDist[match.turn] = Math.hypot(me.x, me.y);
+  play = { frames: res.frames, events: res.events, before, i: 0, t: 0, dinged: new Set(),
+           summary: { by: match.turn, lag: true } };
+}
+
+function lagSettle() {
+  const who = play.summary.by;
+  const cm = (lagDist[who] * 100).toFixed(0);
+  play = null;
+  msg(`${match.players[who].name}: ${cm}cm from the hole.`);
+  hud();
+  if (lagDist.filter((d) => d !== undefined).length < match.players.length) {
+    match.turn = (who + 1) % match.players.length;
+    if (current(match).kind === 'bot') return setTimeout(botTurn, 700);
+    phase = 'aim'; defaultAim();
+    return;
+  }
+  const first = lagWinner(lagDist);
+  setTimeout(() => {
+    msg(`${match.players[first].name} lagged closest — ${match.players[first].name} opens.`);
+    setTimeout(() => start(first), 1100);
+  }, 700);
+}
+
 /* ---------------- match ---------------- */
-function start() {
+const playerSpecs = () => [
+  { name: 'You', kind: 'human', striker: pick.striker, skin: 'kanch', stash: START_STASH },
+  { name: LEVELS[pick.bot].name, kind: 'bot', level: pick.bot, avatar: pick.bot,
+    striker: pick.bot === 'ustaad' ? 'dhampar' : 'goli', skin: 'lakhoti', stash: START_STASH },
+];
+
+function start(first = null) {
   const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
   r = rng(seed);
   used = new Set();
@@ -78,19 +154,11 @@ function start() {
   // while the bot reset to 20 -- so after a few games the counts read 27 against 20 and never
   // went back. What you keep across matches is the pocket below, which is a separate number and
   // does not touch the count either player plays with.
-  match = newMatch({
-    seed, mode: pick.mode, ante: pick.mode === 'pill' ? 3 : 4,
-    players: [
-      { name: 'You', kind: 'human', striker: pick.striker, skin: 'kanch', stash: START_STASH },
-      { name: LEVELS[pick.bot].name, kind: 'bot', level: pick.bot, avatar: pick.bot,
-        striker: pick.bot === 'ustaad' ? 'dhampar' : 'goli', skin: 'lakhoti', stash: START_STASH },
-    ],
-  });
+  match = newMatch({ seed, mode: pick.mode, ante: 4, first, players: playerSpecs() });
+  lagging = false;
   phase = 'aim'; fromLine = false; play = null; botPreview = null; window.__match = match;
   C.cancel(ctl);
   $('#bot-name').textContent = match.players[1].name;
-  $('#pot-lbl').textContent = match.mode === 'pill' ? `TO ${match.target}` : 'POT';
-  document.querySelectorAll('.stash small').forEach((e) => { e.textContent = match.mode === 'pill' ? 'pts' : 'goli'; });
   mountAvatar($('#ava-wrap'), pick.bot, 'idle');
   bubble(say(pick.bot, 'start', r, used));
   $('#a2hs').hidden = true;      // never let the hint sit over the board
@@ -142,6 +210,7 @@ attachInput(canvas, {
 });
 
 function fire(shot) {
+  if (lagging) return lagFire(shot);
   phase = 'anim';
   botPreview = null;
   $('#btn-line').hidden = true;
@@ -164,6 +233,7 @@ function botTurn() {
 
 /* ---------------- settle ---------------- */
 function settle() {
+  if (play.summary.lag) return lagSettle();
   const { summary: sum } = play;
   const turnChanged = !sum.continues;
   const bot = match.players[1];
@@ -295,12 +365,16 @@ requestAnimationFrame(frame);
 /* ---------------- chrome ---------------- */
 function hud() {
   const pill = match.mode === 'pill';
-  $('#you-stash').textContent = pill ? match.players[0].points : match.players[0].stash;
-  $('#bot-stash').textContent = pill ? match.players[1].points : match.players[1].stash;
-  $('#pot').textContent = pill
-    ? (match.players[0].needsHole ? 'HOLE' : match.players[0].points >= match.target ? 'SINK' : '—')
+  const cm = (d) => (d === undefined ? '—' : `${(d * 100).toFixed(0)}`);
+  $('#you-stash').textContent = lagging ? cm(lagDist[0]) : pill ? match.players[0].points : match.players[0].stash;
+  $('#bot-stash').textContent = lagging ? cm(lagDist[1]) : pill ? match.players[1].points : match.players[1].stash;
+  $('#pot-lbl').textContent = lagging ? 'LAG' : pill ? `TO ${match.target}` : 'POT';
+  document.querySelectorAll('.stash small').forEach((e) => { e.textContent = lagging ? 'cm' : pill ? 'pts' : 'goli'; });
+  $('#pot').textContent = lagging ? '·'
+    : pill ? (match.players[0].needsHole ? 'HOLE' : match.players[0].points >= match.target ? 'SINK' : '—')
     : match.pot;
   const ch = $('#chances');
+  if (lagging) { ch.innerHTML = ''; return; }
   const left = shotsLeft(match);
   ch.innerHTML = Array.from({ length: CHANCES }, (_, i) => `<i class="${i < left ? '' : 'spent'}"></i>`).join('');
   ch.title = `${left} shot${left === 1 ? '' : 's'} left this turn`;

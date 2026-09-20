@@ -1,6 +1,6 @@
 // Kanche: physics, rules and the bot ladder. Run: node tests/kanche.test.mjs
 import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, FIELD, dist, powerToClear } from '../public/js/physics.js';
-import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES, TURN_SHOTS, shotsLeft, targetFor, CHOT_POINTS } from '../public/js/rules.js';
+import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES, TURN_SHOTS, shotsLeft, targetFor, CHOT_POINTS, lagWinner, lineUp } from '../public/js/rules.js';
 import { chooseShot, LEVELS } from '../public/js/bot.js';
 import { predictPath, firstOnLine } from '../public/js/input.js';
 import * as C from '../public/js/controls.js';
@@ -370,6 +370,38 @@ const board = () => [
   const res = applyShot(m, { angle: Math.atan2(t.y - st.y, t.x - st.x), power: 0.8 });
   ok('one marble touched is a clean shot', res.events.touched.length === 1 && !res.summary.dirty);
   ok('it scores and the turn continues', res.summary.gained === 1 && res.summary.continues);
+}
+
+// ---------- lagging for turn order ----------
+{
+  ok('the closest throw opens', lagWinner([0.30, 0.12, 0.45]) === 1);
+  ok('a tie goes to the earlier thrower, so there is no re-throw loop', lagWinner([0.2, 0.2]) === 0);
+  ok('one player lags against nobody', lagWinner([0.3]) === 0);
+
+  const m = newMatch({ seed: 3, mode: 'pill', first: 0, players: [{ name: 'A' }, { name: 'B' }] });
+  strikerOf(m, 0).x = 0.4; strikerOf(m, 0).y = -0.2;
+  lineUp(m);
+  const a = strikerOf(m, 0), b = strikerOf(m, 1);
+  ok('lining up puts everyone back behind the line', a.y === SHOOT_LINE && b.y === SHOOT_LINE);
+  ok('and mirrored, so the throw is the same shot for both', Math.abs(a.x + b.x) < 1e-9);
+
+  // The point of lagging is that a better player wins the opening more often than a coin would.
+  // Throwing at the hole is the bot's `needsHole` shot, so this measures the real thing.
+  const lagOnce = (lvl, seed) => {
+    const r = rng(seed);
+    const q = newMatch({ seed, mode: 'pill', first: 0, players: [{ name: 'X', kind: 'bot', level: lvl }, { name: 'Y', kind: 'bot', level: lvl }] });
+    lineUp(q); q.players.forEach((p) => { p.needsHole = true; });
+    const me = strikerOf(q, 0);
+    const shot = chooseShot(q, 0, r);
+    const res = simulate(q.marbles, { ...shot, id: 's0' }, { ringR: q.ringR, pill: true });
+    const rest = res.marbles.find((x) => x.id === 's0');
+    return Math.hypot(rest.x, rest.y);
+  };
+  const avg = (lvl) => { let t = 0; for (let i = 0; i < 25; i++) t += lagOnce(lvl, 600 + i * 31); return t / 25; };
+  const ust = avg('ustaad'), cho = avg('chotu');
+  ok('a better player lands the lag closer to the hole', ust < cho,
+    `ustaad ${(ust * 100).toFixed(0)}cm vs chotu ${(cho * 100).toFixed(0)}cm`);
+  ok('and close enough for it to be a real contest', ust < 0.12, `${(ust * 100).toFixed(0)}cm`);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll Kanche tests passed');

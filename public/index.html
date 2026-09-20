@@ -18,7 +18,7 @@
 // failure has to put itself on the screen or it is invisible -- and an invisible failure is
 // indistinguishable from "it isn't showing".
 (function () {
-  window.KANCHE_BUILD = 'b12';
+  window.KANCHE_BUILD = 'b13';
   var shown = false;
   function bail(what, detail) {
     if (shown) return; shown = true;
@@ -136,6 +136,7 @@
   <canvas id="board"></canvas>
 
   <div class="msgrow">
+    <button id="btn-quit" class="icon-btn" aria-label="Leave this game">✕</button>
     <button id="btn-mute" class="icon-btn" aria-label="Sound">🔊</button>
     <div class="msg" id="msg">Your shot.</div>
     <span class="chances" id="chances" aria-label="Chances left"></span>

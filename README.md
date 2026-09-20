@@ -167,16 +167,22 @@ It also has nerves — σ widens ~30% on a big pot or when down to its last marb
 the hero shot when losing badly. It never shoots instantly: 0.9–2.6s of visible deliberation,
 with the aim line wandering around the shot it actually chose. Instant shots read as a machine.
 
-## Known: the opener has a real edge
+## Lagging
 
-Who shoots first is a fair toss, and the opener wins about 70–78% of matches between identical
-bots, in both modes. That is a lot for a coin flip to decide. Docking the victim ten points to
-create catch-up was tried and measured: it doubled game length and did nothing for the edge, so
-it was dropped rather than kept on the theory that it ought to help.
+Every game opens with a lag: both players throw at the hole from the line, and the closest
+shoots first. It is how the street settles turn order, and here it fixes a real flaw — the
+opener wins 70–78% of matches between identical bots, which is far too much for a coin to
+decide. A throw makes that advantage *earned*.
 
-The right fix is **lagging** — the pre-game throw at the hole that decides turn order in the
-street game. That makes the advantage *earned* rather than arbitrary, which is the difference
-between a flaw and a feature. `newMatch` already takes a `first` argument for it.
+It discriminates properly: measured over 25 throws, the ustaad lands 3cm from the hole and the
+gully kid 24cm. It also doubles as the tutorial, since your first shot of a session is a soft
+one at a big target with nothing at stake.
+
+Ties go to the earlier thrower, which is the convention and avoids a re-throw loop.
+
+Docking a chot victim ten points was the other idea for the same problem. Measured: it doubled
+game length and did nothing for the edge. Dropped rather than kept on the theory that it ought
+to help.
 
 ## The patch is the camera
 
