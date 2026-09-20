@@ -13,6 +13,39 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/game.css">
+<script>
+// Diagnostics, inline and before everything else. There is no console on an iPhone, so any
+// failure has to put itself on the screen or it is invisible -- and an invisible failure is
+// indistinguishable from "it isn't showing".
+(function () {
+  window.KANCHE_BUILD = 'b5';
+  var shown = false;
+  function bail(what, detail) {
+    if (shown) return; shown = true;
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#2a1b10;color:#f3eee2;' +
+      'font:13px/1.45 -apple-system,system-ui,sans-serif;padding:24px;overflow:auto;-webkit-user-select:text;user-select:text';
+    d.innerHTML = '<h2 style="margin:0 0 8px;font-size:17px">Kanche could not start</h2>' +
+      '<p style="opacity:.7;margin:0 0 14px">Build ' + window.KANCHE_BUILD + '. Screenshot this and send it.</p>' +
+      '<p style="margin:0 0 6px"><b>' + what + '</b></p>' +
+      '<pre style="white-space:pre-wrap;word-break:break-word;background:#00000055;padding:10px;border-radius:8px;margin:0">' +
+      String(detail).replace(/</g, '&lt;') + '</pre>' +
+      '<p style="opacity:.6;margin-top:14px">' + navigator.userAgent + '</p>';
+    (document.body || document.documentElement).appendChild(d);
+  }
+  addEventListener('error', function (e) {
+    bail(e.message || 'Failed to load a file', (e.filename || '') + ':' + (e.lineno || '') + ' ' + (e.error && e.error.stack ? e.error.stack : ''));
+  }, true);
+  addEventListener('unhandledrejection', function (e) { bail('Unhandled promise rejection', e.reason && e.reason.stack ? e.reason.stack : e.reason); });
+  // If main.js never sets this flag, the module never ran at all -- the single most useful
+  // thing to know, and the one thing a silent failure never tells you.
+  addEventListener('load', function () {
+    setTimeout(function () {
+      if (!window.KANCHE_BOOTED) bail('The game script never ran.', 'No error was reported, so the module was most likely blocked or served stale. Try the link with ?v=' + Date.now() + ' on the end.');
+    }, 2500);
+  });
+})();
+</script>
 </head>
 <body>
 
@@ -54,7 +87,8 @@
     </div>
 
     <button id="btn-play" class="btn-big">Khelo</button>
-    <p class="fine">Drag back anywhere to aim. Let go when the ring is tight.</p>
+    <p class="fine">Aim with the arrows, then tap SHOOT three times: start, power, release.</p>
+    <p class="fine build" id="build">build —</p>
   </div>
 </section>
 

@@ -289,6 +289,10 @@ function meter() {
   [$('#pad-l'), $('#pad-r')].forEach((b) => { b.disabled = !myTurn() || ctl.stage !== 'idle'; });
 }
 
+// Proof of life for the inline diagnostic in index.html.
+window.KANCHE_BOOTED = true;
+const buildEl = $('#build'); if (buildEl) buildEl.textContent = 'build ' + (window.KANCHE_BUILD || '?');
+
 R.setup(canvas);
 addEventListener('resize', () => R.resize());
 addEventListener('orientationchange', () => setTimeout(() => R.resize(), 250));

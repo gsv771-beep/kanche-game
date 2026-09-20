@@ -52,6 +52,7 @@ body{
 .btn-ghost{width:100%;margin-top:10px;padding:13px;border:1.5px solid var(--line);border-radius:13px;
   background:none;color:var(--chalk);font:600 15px inherit;cursor:pointer}
 .fine{font-size:12px;opacity:.45;text-align:center;margin:14px 0 0}
+.build{font-size:10px;opacity:.3;letter-spacing:1px;margin-top:6px}
 
 /* ---------- hud ---------- */
 .hud{display:flex;align-items:flex-start;justify-content:space-between;padding:10px 14px 4px;gap:8px}

@@ -3,7 +3,13 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 
-# No build step and no hashed filenames, so scripts must be revalidated on every load.
+# There is no build step and no hashed filenames, so a cached index.html can happily pair itself
+# with three-versions-old scripts and fail in ways nobody can debug. Everything the page needs
+# is revalidated on every load; ETags keep that a cheap 304.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
 /js/*
   Cache-Control: no-cache
 /css/*
@@ -13,3 +19,4 @@
   Cache-Control: public, max-age=86400
 /manifest.webmanifest
   Content-Type: application/manifest+json
+  Cache-Control: no-cache
