@@ -16,7 +16,8 @@ export function predictPath(marbles, origin, angle, power, strikerId, assist = 1
   const me = marbles.find((m) => m.id === strikerId);
   const spec = STRIKERS[me?.striker] || STRIKERS.goli;
   const v0 = power * spec.maxSpeed;
-  const range = ((v0 * v0) / (2 * spec.decel)) * Math.max(0.2, assist);
+  // me.decel carries the surface, so the assist line shortens on rough ground by itself.
+  const range = ((v0 * v0) / (2 * (me?.decel || spec.decel))) * Math.max(0.2, assist);
   const ux = Math.cos(angle), uy = Math.sin(angle);
   const pts = [{ x: origin.x, y: origin.y }];
   for (let d = 0.012; d <= range; d += 0.012) {

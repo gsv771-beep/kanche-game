@@ -58,6 +58,34 @@ export const AVATARS = {
     <g class="ava-dhampar"><circle cx="97" cy="104" r="9" fill="#cfe4ef"/><circle cx="94" cy="101" r="3" fill="#fff" opacity=".85"/></g>`),
 };
 
+/** A closed fist, knuckles toward you. Deliberately simple: it is going to be spinning. */
+export const FIST = `<svg viewBox="0 0 120 120" class="hand-svg" aria-hidden="true">
+  <ellipse cx="60" cy="108" rx="26" ry="5" fill="rgba(0,0,0,.35)"/>
+  <path d="M34 56q0-22 26-22t26 22v24q0 16-26 16t-26-16z" fill="#d99a68"/>
+  <path d="M34 62q26-8 52 0v8q-26-8-52 0z" fill="#c1844f" opacity=".55"/>
+  <g fill="#e0a86f">
+    <circle cx="43" cy="58" r="8"/><circle cx="55" cy="55" r="9"/>
+    <circle cx="67" cy="55" r="9"/><circle cx="79" cy="58" r="8"/>
+  </g>
+  <path d="M32 72q-8 4-6 14t12 8z" fill="#c1844f"/>
+  <path d="M34 92q26 10 52 0v6q-26 10-52 0z" fill="#8e6236"/>
+</svg>`;
+
+/** The same hand opened, with the marbles it was hiding sitting on the palm. */
+export const palm = (n) => {
+  const spots = [[60, 62], [47, 68], [73, 68], [53, 54], [67, 54]];
+  const balls = spots.slice(0, Math.max(0, Math.min(5, n))).map(([x, y]) =>
+    `<circle cx="${x}" cy="${y}" r="8" fill="#dff3fb" stroke="#6fa8bd" stroke-width="1.5"/>
+     <circle cx="${x - 2.6}" cy="${y - 2.8}" r="2.6" fill="#fff"/>`).join('');
+  return `<svg viewBox="0 0 120 120" class="hand-svg" aria-hidden="true">
+    <ellipse cx="60" cy="108" rx="28" ry="5" fill="rgba(0,0,0,.35)"/>
+    <path d="M32 60q0-10 6-10t6 10v18h32V60q0-10 6-10t6 10v26q0 18-28 18t-28-18z" fill="#d99a68"/>
+    <path d="M36 74q24-7 48 0v14q-24 8-48 0z" fill="#e8b47f"/>
+    ${balls}
+    <path d="M30 70q-9 3-8 13t13 9z" fill="#c1844f"/>
+  </svg>`;
+};
+
 export function mountAvatar(el, level, state = 'idle') {
   el.innerHTML = AVATARS[level] || AVATARS.bunty;
   setAvatarState(el, state);

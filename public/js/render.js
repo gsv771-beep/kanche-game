@@ -15,7 +15,7 @@ const SKINS = {
 };
 export const PLAYER_COLORS = ['#f0b429', '#4fb3d9', '#e06c5a', '#8ed081'];
 
-let cv, ctx, scale = 1, ox = 0, oy = 0, ground = null, W = 0, H = 0;
+let cv, ctx, scale = 1, ox = 0, oy = 0, ground = null, groundFor = null, W = 0, H = 0;
 
 export function setup(canvas) { cv = canvas; ctx = canvas.getContext('2d'); resize(); }
 
@@ -29,7 +29,7 @@ export function resize() {
   scale = Math.min(W / fw, H / fh);
   ox = (W - fw * scale) / 2 - VIEW.x0 * scale;
   oy = (H - fh * scale) / 2 - VIEW.y0 * scale;
-  ground = null;
+  ground = null; groundFor = null;
 }
 
 export const sx = (wx) => wx * scale + ox;
@@ -37,16 +37,17 @@ export const sy = (wy) => wy * scale + oy;
 export const toWorld = (px, py) => ({ x: (px - ox) / scale, y: (py - oy) / scale });
 export const pxPerM = () => scale;
 
-function buildGround() {
+function buildGround(surf) {
   const g = document.createElement('canvas');
   g.width = W; g.height = H;
   const c = g.getContext('2d');
+  const col = surf?.ground || ['#6b4a2f', '#7d5836', '#5d3f28'];
   const grad = c.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#6b4a2f'); grad.addColorStop(0.55, '#7d5836'); grad.addColorStop(1, '#5d3f28');
+  grad.addColorStop(0, col[0]); grad.addColorStop(0.55, col[1]); grad.addColorStop(1, col[2]);
   c.fillStyle = grad; c.fillRect(0, 0, W, H);
-  // Grit. Seeded so the patch does not crawl between frames.
+  // Grit, sparse on concrete and thick on dirt. Seeded so the ground does not crawl.
   const r = rng(20260919);
-  for (let i = 0; i < Math.round(W * H / 700); i++) {
+  for (let i = 0; i < Math.round(W * H / (surf?.grit || 700)); i++) {
     const x = r.range(0, W), y = r.range(0, H), s = r.range(0.5, 2.1);
     c.fillStyle = `rgba(${r.next() < 0.5 ? '40,26,16' : '190,160,120'},${r.range(0.05, 0.22)})`;
     c.beginPath(); c.arc(x, y, s, 0, 7); c.fill();
@@ -113,9 +114,30 @@ function drawMarble(x, y, rm, skin, opts = {}) {
 
 /** @param view { match, positions, aim, ghosts } */
 export function draw(view) {
-  if (!ground) ground = buildGround();
+  const sid = view.match.surface?.id || 'maidan';
+  if (!ground || groundFor !== sid) { ground = buildGround(view.match.surface); groundFor = sid; }
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(ground, 0, 0);
+
+  // Mud, drawn before anything else touches the board. It has to be unmissable: a hazard you
+  // cannot see is the game cheating, and the whole reason this is patches rather than hidden
+  // variation in the ground.
+  for (const p of view.match.mud || []) {
+    const px = sx(p.x), py = sy(p.y), pr = p.r * scale;
+    const g2 = ctx.createRadialGradient(px, py, pr * 0.2, px, py, pr);
+    g2.addColorStop(0, 'rgba(30,20,10,0.72)'); g2.addColorStop(0.75, 'rgba(38,26,14,0.55)');
+    g2.addColorStop(1, 'rgba(38,26,14,0)');
+    ctx.save();
+    ctx.fillStyle = g2;
+    ctx.beginPath(); ctx.ellipse(px, py, pr, pr * 0.82, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,12,5,0.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(px, py, pr * 0.92, pr * 0.75, 0, 0, 7); ctx.stroke();
+    // a couple of wet glints so it reads as mud rather than a shadow
+    ctx.fillStyle = 'rgba(160,140,110,0.18)';
+    ctx.beginPath(); ctx.ellipse(px - pr * 0.3, py - pr * 0.22, pr * 0.22, pr * 0.1, -0.5, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + pr * 0.28, py + pr * 0.2, pr * 0.15, pr * 0.07, 0.4, 0, 7); ctx.fill();
+    ctx.restore();
+  }
 
   const m = view.match;
   // Beyond the patch there is nothing to play on. On a wide screen the canvas shows more than

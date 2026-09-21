@@ -18,7 +18,7 @@
 // failure has to put itself on the screen or it is invisible -- and an invisible failure is
 // indistinguishable from "it isn't showing".
 (function () {
-  window.KANCHE_BUILD = 'b14';
+  window.KANCHE_BUILD = 'b15';
   var shown = false;
   function bail(what, detail) {
     if (shown) return; shown = true;
@@ -94,6 +94,22 @@
       <button class="card bot" data-bot="chotu"><span class="ava-box"></span><span class="card-t">Chotu</span><span class="card-d">Gully kid</span></button>
       <button class="card bot is-sel" data-bot="bunty"><span class="ava-box"></span><span class="card-t">Bunty</span><span class="card-d">Mohalla champ</span></button>
       <button class="card bot" data-bot="ustaad"><span class="ava-box"></span><span class="card-t">Pappu</span><span class="card-d">Ustaad</span></button>
+    </div>
+
+    <h2 class="lbl">Where you're playing</h2>
+    <div class="cards" id="pick-surface">
+      <button class="card is-sel" data-surface="maidan">
+        <span class="card-t">Dusty maidan</span>
+        <span class="card-d">Plain dirt. Honest ground, no surprises.</span>
+      </button>
+      <button class="card" data-surface="courtyard">
+        <span class="card-t">Concrete aangan</span>
+        <span class="card-d">Smooth and fast. Easy to reach, easy to overshoot the line. No mud.</span>
+      </button>
+      <button class="card" data-surface="barsaat">
+        <span class="card-t">After the rain</span>
+        <span class="card-d">Heavy going, and four mud patches. Anything that reaches one stops dead.</span>
+      </button>
     </div>
 
     <h2 class="lbl">Your striker</h2>
@@ -179,13 +195,20 @@
 <div id="jota" class="modal" hidden>
   <div class="modal-box">
     <h3>Kali Jota</h3>
-    <p class="sub" id="jota-sub">He has a fistful of goli. Odd or even?</p>
-    <div class="fist" id="fist">✊</div>
+    <div class="jota-scene">
+      <div class="jota-ava" id="jota-ava"></div>
+      <div class="hand" id="jota-hand">
+        <div class="hand-fist" id="jota-fist"></div>
+        <div class="hand-palm" id="jota-palm"></div>
+      </div>
+    </div>
+    <p class="sub" id="jota-sub">—</p>
     <div class="jota-btns">
-      <button class="btn-big half" data-call="kali">Kali <small>odd</small></button>
-      <button class="btn-big half" data-call="jota">Jota <small>even</small></button>
+      <button class="btn-big half" data-call="kali" disabled>Kali <small>odd</small></button>
+      <button class="btn-big half" data-call="jota" disabled>Jota <small>even</small></button>
     </div>
     <p class="fine" id="jota-out"></p>
+    <button class="btn-ghost" id="jota-again" hidden>Phir se</button>
     <button class="btn-ghost" id="jota-close">Rehne do</button>
   </div>
 </div>

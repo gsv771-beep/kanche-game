@@ -123,8 +123,10 @@ assumes a crowd of marbles to hunt. Head-to-head that measured at nearly sixty s
 
 Your marble stays on the patch between turns. It is a target, and that exposure is the game.
 
-**Kali Jota.** The sideline bet. A fist of marbles, you call kali (odd) or jota (even). Right, you
-take the handful; wrong, you pay the same number across.
+**Kali Jota.** The sideline bet, played as the ritual rather than as a dialog box: he stands
+there with his hand going round and round behind his back, then brings the closed fist out and
+holds it toward you. You call kali (odd) or jota (even), and he opens it. Right, you take the
+handful; wrong, you pay the same number across — and he has something to say either way.
 
 ## The bot
 
@@ -194,6 +196,30 @@ nothing ever rests outside it, so the two cannot diverge again.
 
 Widening it is safe in both axes because the camera fits by `min(W/width, H/height)`, so the
 visible extent is always at least the field.
+
+## The ground
+
+Three surfaces, and the difference is real rather than decorative — the same flick travels a
+different distance on each, so the power the meter asks for changes with where you are playing.
+
+| | friction | mud | feel |
+|---|---|---|---|
+| **Dusty maidan** | 1.00 | none | the baseline every number here was tuned against |
+| **Concrete aangan** | 0.66 | none | fast; easy to reach, easy to overshoot the line |
+| **After the rain** | 1.22 | four patches | heavy going, and about one shot in four has a mud problem |
+
+The surface is folded into each marble's own `decel` at creation, so the aim line, the power
+mark and the bot's arithmetic all account for the ground without any of them knowing it exists.
+
+**Mud is patches, and they are drawn.** That is deliberate. The brief asked for "unpredictable
+bumps", and hidden variation is exactly what makes a game feel like it is cheating — the same
+reason the invisible steadiness ring had to go. A hazard you can see and aim around is a
+decision; one you cannot is a dice roll. They are mirrored about the shooting axis like
+everything else on this board, and never placed under the ring.
+
+Mud drags rather than halts: a firm shot crosses a patch and falls short, a soft one dies in it.
+The size and stickiness were swept — at r=0.07 and ×14 it was 83% of shots and a third of games
+never finished.
 
 ## Why the board is not to scale
 

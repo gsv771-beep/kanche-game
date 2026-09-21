@@ -45,7 +45,7 @@ function candidates(match, pid) {
     // a staging post that shortens everything and cannot be knocked off.
     const L0 = Math.hypot(me.x, me.y);
     if (L0 > 0.02) {
-      const v0 = Math.sqrt(0.85 * 0.85 + 2 * spec.decel * L0);
+      const v0 = Math.sqrt(0.85 * 0.85 + 2 * me.decel * L0);
       out.push({ target: null, angle: Math.atan2(-me.y, -me.x), power: Math.min(0.99, v0 / spec.maxSpeed), cut: 0, kind: 'pill' });
     }
     // At a hundred, or owing the hole a visit, the hole is the only shot worth taking.
@@ -54,7 +54,7 @@ function candidates(match, pid) {
     for (const t of match.marbles) {
       if (!t.striker || t.id === me.id || t.inPill) continue;   // a marble in the hole is safe
       const L = dist(me.x, me.y, t.x, t.y);
-      const v0 = Math.sqrt(1.1 * 1.1 + 2 * spec.decel * L);
+      const v0 = Math.sqrt(1.1 * 1.1 + 2 * me.decel * L);
       const power = v0 / spec.maxSpeed;
       if (power > 0.99) continue;
       if (blocked(match.marbles, me.x, me.y, t.x, t.y, me.r, [me.id, t.id])) continue;
@@ -75,10 +75,10 @@ function candidates(match, pid) {
     if (blocked(match.marbles, me.x, me.y, g.x, g.y, me.r, [me.id, t.id])) continue;
 
     const travel = match.ringR + t.r - dc + 0.02;           // how far it must roll to clear
-    const vT = Math.sqrt(2 * POT_MARBLE.decel * Math.max(travel, 0.01));
+    const vT = Math.sqrt(2 * t.decel * Math.max(travel, 0.01));
     const K = ((1 + RESTITUTION) * me.mass) / (me.mass + t.mass);   // share of speed handed over
     const vImpact = vT / Math.max(K * cos, 0.05);
-    const v0 = Math.sqrt(vImpact * vImpact + 2 * spec.decel * L);
+    const v0 = Math.sqrt(vImpact * vImpact + 2 * me.decel * L);
     const power = v0 / spec.maxSpeed;
     if (power > 0.96) continue;                             // past this the thumb lifts: foul
     out.push({ target: t.id, angle: Math.atan2(ay, ax), power, cut: Math.acos(Math.min(1, cos)), kind: 'chakri' });
@@ -200,7 +200,7 @@ function best(match, pid, lvl, r, sloppy) {
     let sum = 0;
     for (let i = 0; i < n; i++) {
       const shot = { id: me.id, angle: c.angle + r.normal(0, sd), power: clamp(c.power * (1 + r.normal(0, psd))) };
-      sum += value(match, pid, simulate(match.marbles, shot, { ringR: match.ringR, pill: match.mode === 'pill' }), lvl);
+      sum += value(match, pid, simulate(match.marbles, shot, { ringR: match.ringR, pill: match.mode === 'pill', mud: match.mud }), lvl);
     }
     const ev = sum / n;
     if (!win || ev > win.ev) win = { ...c, ev, sd, psd, heroic };

@@ -2,7 +2,7 @@
 // to the match happens in applyShot(), so the bot can run the real rules in its head and the
 // online layer can replay a turn from just the shot record.
 import { rng } from './rng.js';
-import { simulate, marble, RING_R, SHOOT_LINE, STRIKERS, POT_MARBLE, dist } from './physics.js';
+import { simulate, marble, RING_R, SHOOT_LINE, STRIKERS, POT_MARBLE, SURFACES, dist } from './physics.js';
 const POT_R = POT_MARBLE.r;
 
 export const SKINS = ['doodh', 'kanch', 'neeli', 'lakhoti', 'steel'];
@@ -51,6 +51,24 @@ export const TURN_SHOTS = 4;
 // filled in mirror pairs so that ANY number of marbles gives a pile that is symmetric about the
 // shooting axis. This is not fussiness: a lopsided pile hands one seat a better line on every
 // single break, and bot-vs-bot testing showed it swinging the win rate from 30% to 65%.
+/**
+ * Mud, placed in the approach between the line and the ring -- the stretch every shot crosses,
+ * so they are an obstacle rather than scenery. Mirrored about the shooting axis, like everything
+ * else on this board, so neither seat is handed the clearer run.
+ */
+function mudPatches(surf, r) {
+  const out = [];
+  for (let i = 0; i < Math.floor(surf.patches / 2); i++) {
+    // Swept these: four patches at this size and drag give roughly one shot in six a mud
+    // problem, with matches still finishing at normal length. Bigger or stickier and the mode
+    // collapses -- at r=0.07 and x14 it was 83% of shots and a third of games never ended.
+    const x = r.range(0.10, 0.34), y = r.range(0.10, 0.50), rad = r.range(0.042, 0.055);
+    out.push({ x, y, r: rad, mult: surf.mud });
+    out.push({ x: -x, y, r: rad, mult: surf.mud });
+  }
+  return out;
+}
+
 export function pileSlot(k) {
   const S = 0.0315;                       // ring spacing, a touch over one marble diameter
   let ring = 0, base = 0;
@@ -68,14 +86,16 @@ export function pileSlot(k) {
   }
 }
 
-export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR = RING_R, first = null } = {}) {
+export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR = RING_R, first = null, surface = 'maidan', mud = null } = {}) {
   const r = rng(seed);
   const ps = players.map((p, i) => ({
     id: i, name: p.name, kind: p.kind || 'human', level: p.level || 'champ',
     avatar: p.avatar || 'chotu', striker: p.striker || 'goli', skin: p.skin || SKINS[i % SKINS.length],
     stash: p.stash ?? 20, won: 0, armed: false,
   }));
+  const surf = SURFACES[surface] || SURFACES.maidan;
   const m = { mode, seed, rng: r, ringR, ante, players: ps, target: targetFor(ps.length),
+              surface: surf, mud: mud || mudPatches(surf, r),
               // Who shoots first is a toss, not a fixture. In a race to a target the opener has
               // a real edge -- measured at four wins in five between identical bots -- and in
               // the street it is settled by lagging rather than by seating.
@@ -96,9 +116,9 @@ export function newMatch({ seed = 1, mode = 'chakri', players, ante = 4, ringR =
       // start at the top and space evenly -- a full ring is mirror-symmetric by construction,
       // so neither seat gets the better line
       const th = Math.PI / 2 + (i * 2 * Math.PI) / n;
-      m.marbles.push(marble(`p${i}`, Math.cos(th) * rr, Math.sin(th) * rr, { skin: r.pick(SKINS) }));
+      m.marbles.push(marble(`p${i}`, Math.cos(th) * rr, Math.sin(th) * rr, { skin: r.pick(SKINS), friction: surf.friction }));
     }
-    m.marbles.push(marble('pc', 0, 0, { skin: r.pick(SKINS) }));   // the one in the middle
+    m.marbles.push(marble('pc', 0, 0, { skin: r.pick(SKINS), friction: surf.friction }));   // the one in the middle
     m.pot = n + 1;
   } else {
     // Nothing on the field but the players themselves and the hole. The only targets are each
@@ -116,7 +136,8 @@ function addStrikers(m) {
     // on the line: two marbles that begin 11cm apart just shove each other sideways all game.
     const pos = m.scatter ? scatterStart(i, m.players.length)
       : { x: (i - (m.players.length - 1) / 2) * 0.11, y: SHOOT_LINE };
-    m.marbles.push(marble(strikerId(i), pos.x, pos.y, { striker: p.striker, owner: i, skin: p.skin }));
+    m.marbles.push(marble(strikerId(i), pos.x, pos.y,
+      { striker: p.striker, owner: i, skin: p.skin, friction: m.surface.friction }));
   });
 }
 /** Evenly around the hole, mirrored about the shooting axis so no seat starts closer. */
@@ -181,7 +202,7 @@ export function applyShot(m, shot) {
   // Snapshot before the sim: the renderer replays these marbles against the returned frames,
   // including the ones applyShot is about to remove from the board.
   const before = m.marbles.map((x) => ({ ...x }));
-  const res = simulate(m.marbles, { ...shot, id }, { ringR: m.ringR, pill: m.mode === 'pill' });
+  const res = simulate(m.marbles, { ...shot, id }, { ringR: m.ringR, pill: m.mode === 'pill', mud: m.mud });
   m.marbles = res.marbles;
   m.shotNo++; m.turnShots++;
   m.log.push({ by: p.id, angle: shot.angle, power: shot.power, foul: !!shot.foul });
@@ -284,7 +305,7 @@ function payFoul(m, p, sum) {
   if (m.mode === 'chakri' && m.pot < cap) {
     m.pot += 1;
     const s = pileSlot(m.pot - 1);
-    m.marbles.push(marble(`p${m.shotNo}x`, s.x, s.y, { skin: m.rng.pick(SKINS) }));
+    m.marbles.push(marble(`p${m.shotNo}x`, s.x, s.y, { skin: m.rng.pick(SKINS), friction: m.surface.friction }));
   } else {
     const nxt = m.players[(p.id + 1) % m.players.length];
     nxt.stash += 1; nxt.won += 1;

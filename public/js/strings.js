@@ -14,6 +14,9 @@ export const VOCAB = {
 // ustaad  -- older, quiet, and the worst of the three: he is not needling, he is teaching
 const L = {
   chotu: {
+    jotaMix:  ["Guess karo! Jaldi!", "Meri mutthi mein kitne hain?"],
+    jotaRight:["Arre! Kaise pata chala?", "Tum jaadugar ho kya?"],
+    jotaWrong:["Hahaha! Galat!", "Maine chhupa diya tha!"],
     start:    ['Chalo khelte hain!', 'Main pehle! Main pehle!', 'Meri goli nayi hai.', 'Tum haar jaoge, dekhna.'],
     lagWin:   ['Dekha! Main pehle!', 'Hehe, meri paas.'],
     lagLose:  ['Arre, phir se karte hain na?', 'Theek hai, tum pehle.'],
@@ -37,6 +40,9 @@ const L = {
     lose:     ['Ek aur baar. Please?', 'Maine jaan bhoojh ke haara.'],
   },
   bunty: {
+    jotaMix:  ["Ghuma raha hoon… dekh mat.", "Peeche haath hai. Soch lo."],
+    jotaRight:["Chalo, aaj tumhara din hai.", "Tukka tha."],
+    jotaWrong:["Kali thi, bhai. Kali.", "Seekh lo ginti."],
     start:    ['Paise laaye ho? I mean, goliyan.', 'Line pe aa jao.', 'Ghar se door mat jaana, jaldi khatam hoga.', 'Naya hai kya? Dikh raha hai.'],
     lagWin:   ['Pehli baari meri. Baitho aur dekho.', 'Lag bhi nahi jeet paaye.'],
     lagLose:  ['Theek hai, pehle tum. Farak nahi padta.', 'Ek shot ki baat hai.'],
@@ -60,6 +66,9 @@ const L = {
     lose:     ['Aaj haath theek nahi tha.', 'Ek aur? Double ya kuch nahi.'],
   },
   ustaad: {
+    jotaMix:  ["Peeche ghuma raha hoon. Aaram se socho.", "Mutthi band hai. Ab bolo."],
+    jotaRight:["Sahi. Achha andaaza.", "Ginti aati hai tumhe."],
+    jotaWrong:["Galat. Andaaza bhi ek hunar hai.", "Nahi. Phir se socho."],
     start:    ['Aaram se. Ek ek karke.', 'Kitni goliyan hain jeb mein?', 'Jaldi mat karna. Jaldi mein sab galat hota hai.'],
     lagWin:   ['Lag jeet liya. Aadha kaam ho gaya.', 'Pehli baari keemti hoti hai.'],
     lagLose:  ['Accha lag tha. Shuru karo.', 'Theek. Dekhte hain kya karte ho.'],

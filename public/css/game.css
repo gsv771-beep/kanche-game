@@ -164,13 +164,36 @@ body{
 .tally{display:flex;justify-content:center;gap:26px;margin:20px 0 26px}
 .tally div{font-size:13px;opacity:.65}
 .tally b{display:block;font-size:30px;font-weight:800;opacity:1;color:var(--gold)}
-.modal{position:fixed;inset:0;background:rgba(15,9,5,.88);display:flex;align-items:center;
-  justify-content:center;padding:24px;z-index:20}
-.modal-box{width:100%;max-width:360px;text-align:center}
+.modal{position:fixed;inset:0;background:rgba(10,6,3,.94);display:flex;align-items:center;
+  justify-content:center;padding:20px;z-index:20}
+/* The box needs its own ground. Without it the screen underneath showed straight through the
+   backdrop and the two sets of buttons sat on top of each other. */
+.modal-box{width:100%;max-width:360px;text-align:center;background:#2b1c11;
+  border:1.5px solid var(--line);border-radius:20px;padding:20px 18px 18px;
+  box-shadow:0 24px 60px rgba(0,0,0,.65)}
 .modal-box h3{font-size:24px;margin:0 0 4px}
-.fist{font-size:72px;margin:14px 0 18px}
-.fist.shake{animation:shake .4s}
-@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg)}75%{transform:rotate(12deg)}}
+/* The scene: he stands there and mixes them behind his back before offering the fist. */
+.jota-scene{position:relative;height:138px;margin:8px 0 12px;display:flex;align-items:flex-end;justify-content:center}
+.jota-ava{width:94px}
+.jota-ava svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
+.hand{position:absolute;left:50%;bottom:0;width:66px;margin-left:24px;transform-origin:50% 60%}
+.hand-svg{width:100%;height:auto;display:block}
+.hand-palm{display:none}
+.hand.is-open .hand-fist{display:none}
+.hand.is-open .hand-palm{display:block}
+
+/* Mixing: the hand orbits behind him, small and dimmed, the way it looks from the front. */
+.hand.is-mix{animation:mix .62s linear infinite;filter:brightness(.55) blur(.4px);z-index:-1}
+@keyframes mix{
+  from{transform:rotate(0deg) translateX(26px) rotate(0deg) scale(.62)}
+  to{transform:rotate(360deg) translateX(26px) rotate(-360deg) scale(.62)}
+}
+/* ...then comes round and is held out to you */
+.hand.is-offer{animation:offer .5s cubic-bezier(.2,1.5,.4,1) forwards;z-index:2}
+@keyframes offer{from{transform:translate(18px,4px) scale(.62)}to{transform:translate(0,0) scale(1.08)}}
+.hand.is-open{animation:reveal .45s ease-out forwards;z-index:2}
+@keyframes reveal{from{transform:scale(1.08) rotate(0)}to{transform:scale(1.18) rotate(-6deg)}}
+.jota-btns button[disabled]{opacity:.35}
 .jota-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 /* ---------- add to home screen hint ---------- */

@@ -1,5 +1,5 @@
 // Kanche: physics, rules and the bot ladder. Run: node tests/kanche.test.mjs
-import { simulate, marble, STRIKERS, RING_R, SHOOT_LINE, FIELD, dist, powerToClear } from '../public/js/physics.js';
+import { simulate, marble, STRIKERS, SURFACES, RING_R, SHOOT_LINE, FIELD, dist, powerToClear } from '../public/js/physics.js';
 import { newMatch, applyShot, pileSlot, kaliJota, strikerOf, potMarbles, CHANCES, TURN_SHOTS, shotsLeft, targetFor, CHOT_POINTS, lagWinner, lineUp } from '../public/js/rules.js';
 import { chooseShot, LEVELS } from '../public/js/bot.js';
 import { predictPath, firstOnLine } from '../public/js/input.js';
@@ -443,6 +443,57 @@ const board = () => [
     prev = line;
   }
   ok('and never repeats itself back to back, even once its pools run dry', backToBack === 0);
+}
+
+// ---------- the ground you play on ----------
+{
+  ok('the maidan is the baseline everything was tuned against, so it is exactly 1 and has no mud',
+    SURFACES.maidan.friction === 1 && SURFACES.maidan.patches === 0);
+  ok('concrete really is faster and rain really is heavier',
+    SURFACES.courtyard.friction < 1 && SURFACES.barsaat.friction > 1);
+
+  // The surface is folded into each marble's own deceleration, which is what makes every
+  // formula downstream -- the aim line, the power mark, the bot's arithmetic -- account for it
+  // without any of them knowing the ground exists.
+  const on = (sf) => marble('s0', -0.055, 0.70, { striker: 'goli', friction: SURFACES[sf].friction });
+  ok('a marble carries its surface in its own friction', on('courtyard').decel < on('maidan').decel);
+  const need = (sf) => {
+    const s = on(sf), t = marble('t', 0, -0.241, { friction: SURFACES[sf].friction });
+    return powerToClear(s, t, RING_R, s.x, s.y);
+  };
+  ok('so the power the meter asks for changes with the ground', need('courtyard') < need('maidan') - 0.05,
+    `concrete ${need('courtyard').toFixed(2)} vs maidan ${need('maidan').toFixed(2)}`);
+
+  // Mud is visible and local, never hidden variation.
+  const board = [marble('s0', 0, 0.40, { striker: 'goli' }), marble('t', 0, -0.20, {})];
+  const shot = { id: 's0', angle: -Math.PI / 2, power: 0.75 };
+  const clean = simulate(board, shot, { ringR: RING_R });
+  const muddy = simulate(board, shot, { ringR: RING_R, mud: [{ x: 0, y: 0.15, r: 0.075, mult: 9 }] });
+  ok('the same shot reaches the target on clean ground', !!clean.events.firstContact && clean.events.knockedOut.length === 1);
+  ok('and is stopped short by a mud patch', !muddy.events.firstContact && muddy.events.inMud);
+  // It drags rather than halts on contact: a hard shot crosses a patch and falls short, a soft
+  // one dies in it. That is the honest reading of "stops the marble dead" -- dead for anything
+  // that was not hit hard enough, which is a decision rather than a wall.
+  // Compared on an empty board: with the target present the clean shot loses energy to the
+  // collision too, so their resting places are not the comparison anyone means.
+  const lone = [marble('s0', 0, 0.40, { striker: 'goli' })];
+  const far = simulate(lone, shot, { ringR: RING_R }).marbles[0].y;
+  const near = simulate(lone, shot, { ringR: RING_R, mud: [{ x: 0, y: 0.15, r: 0.075, mult: 9 }] }).marbles[0].y;
+  ok('and an identical shot travels markedly less far for having crossed it',
+    near - far > 0.08, `clean ${far.toFixed(3)} vs muddy ${near.toFixed(3)}`);
+  const soft = simulate(board, { ...shot, power: 0.45 }, { ringR: RING_R, mud: [{ x: 0, y: 0.15, r: 0.075, mult: 9 }] });
+  ok('a soft shot dies in the patch', Math.abs(soft.marbles[0].y - 0.15) < 0.09,
+    `rests at y ${soft.marbles[0].y.toFixed(3)}, mud at 0.15`);
+
+  for (const sf of ['maidan', 'courtyard', 'barsaat']) {
+    const m = newMatch({ seed: 5, mode: 'chakri', ante: 4, first: 0, surface: sf, players: [{ name: 'A' }, { name: 'B' }] });
+    ok(`${sf}: the patches are mirrored, like everything else on this board`,
+      m.mud.every((p) => m.mud.some((q) => Math.abs(q.x + p.x) < 1e-9 && Math.abs(q.y - p.y) < 1e-9)));
+    ok(`${sf}: no mud sits under the ring, where it would trap a marble out of reach`,
+      m.mud.every((p) => Math.hypot(p.x, p.y) - p.r > m.ringR * 0.6));
+    ok(`${sf}: every marble on the board carries that surface's friction`,
+      m.marbles.every((x) => Math.abs(x.decel - (x.striker ? STRIKERS[x.striker].decel : 5.2) * SURFACES[sf].friction) < 1e-9));
+  }
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll Kanche tests passed');

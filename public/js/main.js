@@ -5,7 +5,7 @@ import * as R from './render.js';
 import { attachInput, predictPath, firstOnLine } from './input.js';
 import * as C from './controls.js';
 import * as A from './audio.js';
-import { mountAvatar, setAvatarState, AVATARS } from './avatars.js';
+import { mountAvatar, setAvatarState, AVATARS, FIST, palm } from './avatars.js';
 import { say, summaryLine, eventFor } from './strings.js';
 import { rng } from './rng.js';
 import { SHOOT_LINE, dist, powerToClear, simulate } from './physics.js';
@@ -20,7 +20,7 @@ const store = {
 
 const START_STASH = 20;   // what both players bring to the field, every match
 let pocketBase = 0;       // marbles won across all previous matches, before this one
-let pick = { mode: 'chakri', bot: 'bunty', striker: 'goli' };
+let pick = { mode: 'chakri', bot: 'bunty', striker: 'goli', surface: 'maidan' };
 let match = null, r = null, phase = 'idle', fromLine = false, used = new Set();
 const ctl = C.createControls();
 const FOUL_AT = 0.97;   // was 0.92, which made the top of the bar a trap rather than a choice
@@ -38,6 +38,7 @@ const canvas = $('#board');
 document.querySelectorAll('#pick-mode .card').forEach((b) => b.onclick = () => sel('#pick-mode', b, () => pick.mode = b.dataset.mode));
 document.querySelectorAll('#pick-bot .card').forEach((b) => b.onclick = () => sel('#pick-bot', b, () => pick.bot = b.dataset.bot));
 document.querySelectorAll('#pick-striker .card').forEach((b) => b.onclick = () => sel('#pick-striker', b, () => pick.striker = b.dataset.striker));
+document.querySelectorAll('#pick-surface .card').forEach((b) => b.onclick = () => sel('#pick-surface', b, () => pick.surface = b.dataset.surface));
 function sel(group, btn, fn) {
   document.querySelectorAll(`${group} .card`).forEach((c) => c.classList.toggle('is-sel', c === btn));
   fn(); A.unlock();
@@ -94,7 +95,7 @@ $('#pad-go').addEventListener('pointerdown', (e) => {
 function startLag() {
   const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
   r = rng(seed); used = new Set(); lagging = true; lagDist = [];
-  match = newMatch({ seed, mode: 'pill', first: 0, players: playerSpecs() });
+  match = newMatch({ seed, mode: 'pill', first: 0, surface: pick.surface, players: playerSpecs() });
   lineUp(match);
   // Both "owe the hole", which is exactly the shot a lag is -- and it makes the bot aim there.
   match.players.forEach((p) => { p.needsHole = true; });
@@ -113,7 +114,7 @@ function lagFire(shot) {
   phase = 'anim'; botPreview = null;
   const id = strikerId(match.turn);
   const before = match.marbles.map((x) => ({ ...x }));
-  const res = simulate(match.marbles, { ...shot, id }, { ringR: match.ringR, pill: true });
+  const res = simulate(match.marbles, { ...shot, id }, { ringR: match.ringR, pill: true, mud: match.mud });
   match.marbles = res.marbles;
   const me = match.marbles.find((x) => x.id === id);
   lagDist[match.turn] = Math.hypot(me.x, me.y);
@@ -157,7 +158,7 @@ function start(first = null) {
   // while the bot reset to 20 -- so after a few games the counts read 27 against 20 and never
   // went back. What you keep across matches is the pocket below, which is a separate number and
   // does not touch the count either player plays with.
-  match = newMatch({ seed, mode: pick.mode, ante: 4, first, players: playerSpecs() });
+  match = newMatch({ seed, mode: pick.mode, ante: 4, first, surface: pick.surface, players: playerSpecs() });
   lagging = false;
   phase = 'aim'; fromLine = false; play = null; botPreview = null; window.__match = match;
   C.cancel(ctl);
@@ -319,15 +320,46 @@ function tally() {
 }
 
 /* ---------------- kali jota ---------------- */
-$('#btn-jota').onclick = () => { $('#jota').hidden = false; $('#jota-out').textContent = ''; };
+// He stands there, hand going round and round behind his back, and then holds out the fist.
+// The mixing is the whole ritual -- guessing at a static emoji is not the game.
+let jotaHand = null;
+const jotaBtns = () => Array.from(document.querySelectorAll('.jota-btns button'));
+
+function jotaRound() {
+  const bot = match.players[1];
+  const hand = $('#jota-hand');
+  jotaHand = 1 + r.int(5);                       // hidden until he opens it
+  $('#jota-fist').innerHTML = FIST;
+  $('#jota-palm').innerHTML = palm(jotaHand);
+  hand.className = 'hand is-mix';
+  $('#jota-out').textContent = '';
+  $('#jota-again').hidden = true;
+  jotaBtns().forEach((b) => { b.disabled = true; });
+  $('#jota-sub').textContent = `${bot.name} is mixing them behind his back…`;
+  bubble(null);
+  setTimeout(() => {
+    if ($('#jota').hidden) return;
+    hand.className = 'hand is-offer';
+    $('#jota-sub').textContent = say(bot.level, 'jotaMix', r, used) || 'Kali ya Jota?';
+    jotaBtns().forEach((b) => { b.disabled = false; });
+  }, 1900);
+}
+
+$('#btn-jota').onclick = () => { $('#jota').hidden = false; mountAvatar($('#jota-ava'), pick.bot, 'idle'); jotaRound(); };
+$('#jota-again').onclick = () => jotaRound();
 $('#jota-close').onclick = () => { $('#jota').hidden = true; tally(); };
-document.querySelectorAll('.jota-btns button').forEach((b) => b.onclick = () => {
-  const handful = 1 + r.int(5);
-  const res = kaliJota(match, 0, 1, b.dataset.call, handful);
-  $('#fist').classList.add('shake');
-  setTimeout(() => { $('#fist').classList.remove('shake'); $('#fist').textContent = '🖐'; }, 400);
-  $('#jota-out').textContent = `${res.n} in the fist — ${res.isOdd ? 'kali' : 'jota'}. ` +
-    (res.right ? `You take ${res.moved}.` : `You pay ${res.moved}.`);
+jotaBtns().forEach((b) => b.onclick = () => {
+  if (b.disabled) return;
+  const res = kaliJota(match, 0, 1, b.dataset.call, jotaHand);
+  $('#jota-hand').className = 'hand is-open';
+  jotaBtns().forEach((x) => { x.disabled = true; });
+  A[res.right ? 'ding' : 'thud']();
+  $('#jota-sub').textContent = `${res.n} in the fist — ${res.isOdd ? 'kali' : 'jota'}.`;
+  $('#jota-out').textContent = res.right ? `Right. You take ${res.moved}.` : `Wrong. You pay ${res.moved}.`;
+  setTimeout(() => {
+    $('#jota-sub').textContent = say(match.players[1].level, res.right ? 'jotaRight' : 'jotaWrong', r, used);
+    $('#jota-again').hidden = false;
+  }, 900);
   tally();   // the side bet moves the same net the match did, so the pocket follows
 });
 

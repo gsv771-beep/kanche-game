@@ -31,6 +31,29 @@ export const STRIKERS = {
 };
 export const POT_MARBLE = { r: 0.0140, mass: 1.00, decel: 5.20 };
 
+/**
+ * What you are playing on. Rolling deceleration is scaled by the surface, so the same flick
+ * travels a different distance on each -- which changes every shot in every mode rather than
+ * decorating the board.
+ *
+ * Mud is patches, not a global. Deliberately: they are drawn on the ground, so you can see them
+ * and aim around them. Invisible variation -- "unpredictable bumps" -- reads as the game
+ * cheating, which is exactly why the hidden steadiness ring had to go.
+ */
+export const SURFACES = {
+  // The maidan is the baseline every number in this game was tuned against, so its friction is
+  // exactly 1 and it has no mud. Difficulty belongs in the choice of ground, not in the default.
+  maidan:    { id: 'maidan',    label: 'Dusty maidan',  blurb: 'Plain dirt. The ground everything else is measured against.',
+               friction: 1.00, patches: 0, mud: 1,
+               ground: ['#6b4a2f', '#7d5836', '#5d3f28'], grit: 700 },
+  courtyard: { id: 'courtyard', label: 'Concrete aangan', blurb: 'Smooth and fast. Easy to reach, easy to overshoot the line.',
+               friction: 0.66, patches: 0, mud: 1,
+               ground: ['#6f6b64', '#837d74', '#565049'], grit: 2600 },
+  barsaat:   { id: 'barsaat',   label: 'After the rain', blurb: 'Heavy going, and four mud patches. Anything that reaches one stops dead.',
+               friction: 1.22, patches: 4, mud: 8,
+               ground: ['#57452f', '#6a5539', '#413425'], grit: 900 },
+};
+
 const RESTITUTION = 0.93;   // glass on glass is very lively
 const WALL_BOUNCE = 0.25;   // the edge of the patch is dirt, not a cushion
 const DT = 1 / 240;         // fixed physics step; render frames are sampled every 4th step
@@ -54,7 +77,8 @@ export function powerToClear(striker, target, ringR, fx, fy) {
   const K = ((1 + RESTITUTION) * striker.mass) / (striker.mass + target.mass);
   const vImpact = vT / Math.max(K, 0.05);
   const L = dist(fx, fy, target.x, target.y);
-  return Math.sqrt(vImpact * vImpact + 2 * spec.decel * L) / spec.maxSpeed;
+  // striker.decel, not the spec's: that is the one the surface has been folded into.
+  return Math.sqrt(vImpact * vImpact + 2 * striker.decel * L) / spec.maxSpeed;
 }
 
 /** A marble in play. `owner` is the player index that staked it; null for the pot. */
@@ -62,7 +86,10 @@ export function marble(id, x, y, opts = {}) {
   const spec = opts.striker ? STRIKERS[opts.striker] : POT_MARBLE;
   return {
     id, x, y, vx: 0, vy: 0,
-    r: spec.r, mass: spec.mass, decel: spec.decel,
+    // The surface is baked into the marble's own deceleration, so every formula that already
+    // reads marble.decel -- the aim assist, the power guidance, the bot's arithmetic -- accounts
+    // for the ground without knowing the ground exists.
+    r: spec.r, mass: spec.mass, decel: spec.decel * (opts.friction ?? 1),
     striker: opts.striker || null,
     owner: opts.owner ?? null,
     skin: opts.skin || 'kanch',
@@ -117,7 +144,8 @@ export function simulate(marbles, shot, opts = {}) {
   // striker met first -- a marble knocked into its neighbour has touched two, and under the
   // clean-hit rule that ends the turn.
   const events = { firstContact: null, knockedOut: [], pilled: [], impacts: [], touched: [],
-                   strikerInRing: false, settledAt: 0 };
+                   strikerInRing: false, settledAt: 0, inMud: false };
+  const mud = opts.mud || [];
   const frames = [];
   const snap = () => { const f = new Float32Array(m.length * 2); m.forEach((x, i) => { f[i * 2] = x.x; f[i * 2 + 1] = x.y; }); frames.push(f); };
   snap();
@@ -131,7 +159,12 @@ export function simulate(marbles, shot, opts = {}) {
         a.x += a.vx * DT; a.y += a.vy * DT;
         const sp = Math.hypot(a.vx, a.vy);
         if (sp > 0) {
-          const ns = sp - a.decel * DT;
+          // Mud is local and visible: cross one and it drags you down hard.
+          let dec = a.decel;
+          for (const p of mud) {
+            if (dist(a.x, a.y, p.x, p.y) < p.r) { dec = a.decel * p.mult; if (a.id === shot.id) events.inMud = true; break; }
+          }
+          const ns = sp - dec * DT;
           if (ns <= REST_SPEED) { a.vx = a.vy = 0; } else { a.vx *= ns / sp; a.vy *= ns / sp; }
         }
         // the patch has a lip; marbles do not escape into the road
