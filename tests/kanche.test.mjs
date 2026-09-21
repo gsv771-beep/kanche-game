@@ -5,6 +5,7 @@ import { chooseShot, LEVELS } from '../public/js/bot.js';
 import { predictPath, firstOnLine } from '../public/js/input.js';
 import * as C from '../public/js/controls.js';
 import { rng } from '../public/js/rng.js';
+import { say, eventFor, allLines } from '../public/js/strings.js';
 import { readFileSync } from 'node:fs';
 
 let failures = 0;
@@ -402,6 +403,46 @@ const board = () => [
   ok('a better player lands the lag closer to the hole', ust < cho,
     `ustaad ${(ust * 100).toFixed(0)}cm vs chotu ${(cho * 100).toFixed(0)}cm`);
   ok('and close enough for it to be a real contest', ust < 0.12, `${(ust * 100).toFixed(0)}cm`);
+}
+
+// ---------- the opponent's mouth ----------
+{
+  const chars = allLines();
+  ok('all three characters have their own lines', chars.length === 3 && chars.every(([, l]) => l.length > 30),
+    chars.map(([k, l]) => `${k}:${l.length}`).join(' '));
+  ok('nobody shares a line with anybody else', (() => {
+    const all = chars.flatMap(([, l]) => l);
+    return new Set(all).size === all.length;
+  })());
+
+  // Every event the router can produce must have something to say, in every voice. A missing
+  // pool means the opponent silently says nothing at the exact moment he should be talking.
+  const events = ['start', 'lagWin', 'lagLose', 'botScore', 'botBig', 'botMiss', 'botFoul',
+                  'botDirty', 'botRun', 'youScore', 'youBig', 'youMiss', 'youNear', 'youFoul',
+                  'youDirty', 'youOut', 'ahead', 'behind', 'matchPoint', 'win', 'lose'];
+  const r2 = rng(5);
+  const gaps = [];
+  for (const lvl of ['chotu', 'bunty', 'ustaad']) for (const e of events) {
+    if (!say(lvl, e, r2, new Set())) gaps.push(`${lvl}.${e}`);
+  }
+  ok('every event has a line in every voice', gaps.length === 0, gaps.join(', '));
+
+  ok('the router picks the most specific thing that happened',
+    eventFor({ by: 0, dirty: true, foul: true, gained: 3 }, {}) === 'youDirty' &&
+    eventFor({ by: 0, foul: true, gained: 3 }, {}) === 'youFoul' &&
+    eventFor({ by: 1, gained: 10 }, { botStreak: 3 }) === 'botRun' &&
+    eventFor({ by: 0, gained: 0, continues: true }, { touched: true }) === 'youNear' &&
+    eventFor({ by: 0, gained: 0, continues: false }, {}) === 'youOut');
+
+  // It never says the same thing twice running, which is the repeat anyone notices.
+  const r3 = rng(9), u = new Set();
+  let backToBack = 0, prev = '';
+  for (let i = 0; i < 200; i++) {
+    const line = say('bunty', events[i % events.length], r3, u);
+    if (line && line === prev) backToBack++;
+    prev = line;
+  }
+  ok('and never repeats itself back to back, even once its pools run dry', backToBack === 0);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll Kanche tests passed');

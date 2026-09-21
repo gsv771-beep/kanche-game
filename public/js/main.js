@@ -6,7 +6,7 @@ import { attachInput, predictPath, firstOnLine } from './input.js';
 import * as C from './controls.js';
 import * as A from './audio.js';
 import { mountAvatar, setAvatarState, AVATARS } from './avatars.js';
-import { say, summaryLine } from './strings.js';
+import { say, summaryLine, eventFor } from './strings.js';
 import { rng } from './rng.js';
 import { SHOOT_LINE, dist, powerToClear, simulate } from './physics.js';
 
@@ -29,6 +29,7 @@ let held = 0;        // an aim arrow being held down
 let dragging = false;
 let lagging = false; // the pre-game throw for turn order
 let lagDist = [];
+let botStreak = 0;   // consecutive scoring shots inside the opponent's current turn
 let play = null;          // { before, frames, events, summary, i, dinged:Set }
 let botPreview = null;    // the opponent's wandering aim line while it thinks
 const canvas = $('#board');
@@ -135,7 +136,9 @@ function lagSettle() {
   const first = lagWinner(lagDist);
   setTimeout(() => {
     msg(`${match.players[first].name} lagged closest — ${match.players[first].name} opens.`);
-    setTimeout(() => start(first), 1100);
+    bubble(say(match.players[1].level, first === 1 ? 'lagWin' : 'lagLose', r, used));
+    setAvatarState($('#ava-wrap'), first === 1 ? 'happy' : 'idle');
+    setTimeout(() => start(first), 1600);
   }, 700);
 }
 
@@ -231,6 +234,17 @@ function botTurn() {
   setTimeout(() => { if (phase === 'bot') { A.flick(shot.power); fire(shot); } }, wait);
 }
 
+/** Positive when the opponent is in front. */
+function standing() {
+  const [you, bot] = match.players;
+  return match.mode === 'pill' ? Math.sign(bot.points - you.points) : Math.sign(bot.won - you.won);
+}
+/** One more score and that player takes the game. */
+function onMatchPoint(pid) {
+  const p = match.players[pid];
+  return match.mode === 'pill' ? p.points >= match.target : match.pot <= 1;
+}
+
 /* ---------------- settle ---------------- */
 function settle() {
   if (play.summary.lag) return lagSettle();
@@ -241,19 +255,26 @@ function settle() {
   if (sum.gained > 0) A.ding();
   if (sum.foul) A.thud();
 
-  if (!mine) {
-    setAvatarState($('#ava-wrap'), sum.gained > 0 ? 'happy' : sum.foul ? 'sad' : 'idle');
-    bubble(say(bot.level, sum.gained > 1 ? 'big' : sum.gained ? 'win' : sum.foul ? 'foul' : 'miss', r, used));
-  } else {
-    setAvatarState($('#ava-wrap'), 'idle');
-    if (sum.gained > 0 || sum.foul) bubble(say(bot.level, sum.gained > 0 ? 'oppWin' : 'oppMiss', r, used));
-  }
+  botStreak = mine ? 0 : (sum.gained > 0 ? botStreak + 1 : 0);
+  // He comments on every shot now, yours included. A silent opponent is a scoreboard.
+  const ev = eventFor(sum, { touched: !!play.events.firstContact, botStreak });
+  setAvatarState($('#ava-wrap'),
+    mine ? (sum.gained > 0 ? 'sad' : sum.foul || sum.dirty ? 'happy' : 'idle')
+         : (sum.gained > 0 ? 'happy' : sum.foul || sum.dirty ? 'sad' : 'idle'));
+  // One more score and he takes it: worth saying out loud, and it beats any other line.
+  bubble(say(bot.level, onMatchPoint(1) ? 'matchPoint' : ev, r, used));
   msg(summaryLine(sum, match.players));
   play = null; hud();
 
   if (match.phase === 'over') return setTimeout(over, 900);
   const cur = current(match);
+  if (turnChanged) botStreak = 0;
   if (cur.kind === 'bot') return setTimeout(botTurn, 650);
+  // A word on the standings when the board changes hands, now and then.
+  if (turnChanged && r.next() < 0.35) {
+    const lead = standing();
+    if (lead !== 0) setTimeout(() => bubble(say(bot.level, lead > 0 ? 'ahead' : 'behind', r, used)), 1400);
+  }
   phase = 'aim';
   if (turnChanged) defaultAim();
   // Offer the walk back to the line whenever the striker is lying inside the ring.
@@ -267,6 +288,9 @@ function over() {
   const won = pill ? match.winner === 0 : you.won > bot.won;
   const tie = !pill && you.won === bot.won;
   $('#over-title').textContent = won ? 'Jeet gaye!' : tie ? 'Barabar' : 'Haar gaye';
+  // He gets the last word either way -- that is most of what makes losing to him sting and
+  // beating him satisfying.
+  $('#over-quote').textContent = say(bot.level, won ? 'lose' : 'win', r, used);
   $('#over-line').textContent = pill
     ? (won ? `${you.points} and sunk. ${bot.name} left on ${bot.points}.`
            : `${bot.name} got there first — ${bot.points} to your ${you.points}.`)
