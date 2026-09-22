@@ -18,7 +18,7 @@
 // failure has to put itself on the screen or it is invisible -- and an invisible failure is
 // indistinguishable from "it isn't showing".
 (function () {
-  window.KANCHE_BUILD = 'b15';
+  window.KANCHE_BUILD = 'b16';
   var shown = false;
   function bail(what, detail) {
     if (shown) return; shown = true;
@@ -94,7 +94,9 @@
       <button class="card bot" data-bot="chotu"><span class="ava-box"></span><span class="card-t">Chotu</span><span class="card-d">Gully kid</span></button>
       <button class="card bot is-sel" data-bot="bunty"><span class="ava-box"></span><span class="card-t">Bunty</span><span class="card-d">Mohalla champ</span></button>
       <button class="card bot" data-bot="ustaad"><span class="ava-box"></span><span class="card-t">Pappu</span><span class="card-d">Ustaad</span></button>
+      <button class="card bot" data-bot="guddi"><span class="ava-box"></span><span class="card-t">Guddi</span><span class="card-d">Gully ki rani</span></button>
     </div>
+    <p class="fine" id="ladder-note"></p>
 
     <h2 class="lbl">Where you're playing</h2>
     <div class="cards" id="pick-surface">
@@ -121,6 +123,10 @@
       <button class="card" data-striker="dhampar">
         <span class="card-t">Dhampar</span>
         <span class="card-d">Big and heavy. Ploughs straight through — but slow, short range, and it sticks in the ring.</span>
+      </button>
+      <button class="card" data-striker="steel">
+        <span class="card-t">Steel</span>
+        <span class="card-d">A bearing off a scooter wheel. Nothing shifts it and it never cracks — but it is dead weight to flick.</span>
       </button>
     </div>
 
@@ -155,7 +161,9 @@
     <button id="btn-quit" class="icon-btn" aria-label="Leave this game">✕</button>
     <button id="btn-mute" class="icon-btn" aria-label="Sound">🔊</button>
     <div class="msg" id="msg">Your shot.</div>
+    <span class="wear" id="wear" hidden title="How chipped your striker is"><i></i></span>
     <span class="chances" id="chances" aria-label="Chances left"></span>
+    <button id="btn-newstriker" class="chip" hidden>New striker (1)</button>
     <button id="btn-line" class="chip" hidden>Take the line</button>
   </div>
 
@@ -176,6 +184,11 @@
     <p class="swap">Touch the board to aim · ◀ ▶ to nudge</p>
   </footer>
   <div class="turn-flag" id="turn-flag" hidden></div>
+  <div class="wager" id="wager" hidden>
+    <span id="wager-txt"></span>
+    <button class="wager-yes" id="wager-yes">Haan</button>
+    <button class="wager-no" id="wager-no">Nahi</button>
+  </div>
 </section>
 
 <!-- ============ RESULT ============ -->
@@ -185,6 +198,14 @@
     <p id="over-line" class="sub"></p>
     <p id="over-quote" class="quote"></p>
     <div class="tally" id="tally"></div>
+    <div class="cry" id="cry" hidden>
+      <div class="cry-ava" id="cry-ava"></div>
+      <p class="cry-txt" id="cry-txt"></p>
+      <div class="jota-btns">
+        <button class="btn-big half" id="cry-lend">Udhaar de do <small>3 goli</small></button>
+        <button class="btn-ghost" id="cry-no">Nahi</button>
+      </div>
+    </div>
     <button id="btn-jota" class="btn-ghost">Kali Jota — double or nothing</button>
     <button id="btn-again" class="btn-big">Ek aur</button>
     <button id="btn-menu" class="btn-ghost">Change game</button>

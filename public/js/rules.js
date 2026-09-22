@@ -21,6 +21,7 @@ export const MODES = {
 // single game. Going via the hole is what the street rule means by taking the hole's help -- it
 // is central, nothing can knock you out of it, and everything is nearer from there.
 export const CHOT_POINTS = 10;
+export const NEW_STRIKER = 1;   // what a replacement costs you, in marbles
 /**
  * The street count runs to a hundred, which assumes a crowd -- with four other marbles to hunt
  * you reach it quickly. Head-to-head it is ten chots, and since each one has to be paid for
@@ -181,6 +182,25 @@ export function shotOrigin(m, i) {
   return { x: s.x, y: s.y };
 }
 
+/** Fit a fresh striker: same kind, no wear, back behind the line. */
+export function fitStriker(m, i) {
+  const old = strikerOf(m, i);
+  const spread = (i - (m.players.length - 1) / 2) * 0.11;
+  const fresh = marble(strikerId(i), spread, SHOOT_LINE,
+    { striker: m.players[i].striker, owner: i, skin: m.players[i].skin, friction: m.surface.friction });
+  m.marbles[m.marbles.indexOf(old)] = fresh;
+  return fresh;
+}
+
+/** Buy a replacement mid-turn, before the old one gives out. */
+export function buyStriker(m, i) {
+  const p = m.players[i];
+  if (p.stash < NEW_STRIKER) return false;
+  p.stash -= NEW_STRIKER; p.won -= NEW_STRIKER;
+  fitStriker(m, i);
+  return true;
+}
+
 function respot(m, i) {
   const s = strikerOf(m, i);
   const spread = (i - (m.players.length - 1) / 2) * 0.11;
@@ -283,6 +303,20 @@ export function applyShot(m, shot) {
     sum.chancesLeft = m.chances;
   }
 
+  // A shattered striker ends the turn wherever you were, and a new one costs a marble. If you
+  // cannot pay for it you are done -- which is the real street ending, not a scoreboard.
+  if (ev.shattered) {
+    sum.shattered = true; sum.continues = false;
+    if (p.stash >= NEW_STRIKER) {
+      p.stash -= NEW_STRIKER; p.won -= NEW_STRIKER;
+      sum.note = 'Your striker cracked clean through. A new one costs you one.';
+      fitStriker(m, p.id);
+    } else {
+      sum.note = 'Striker gone, and nothing left to buy another with.';
+      m.phase = 'over'; m.winner = (p.id + 1) % m.players.length;
+      return { frames: res.frames, events: ev, summary: sum, before };
+    }
+  }
   if (sum.continues && m.turnShots >= TURN_SHOTS) { sum.continues = false; sum.note += ' Turn over.'; }
   if (!sum.continues) {
     // In Pill Chot your marble stays on the patch between turns -- it is a target, and that

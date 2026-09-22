@@ -45,6 +45,25 @@ export const AVATARS = {
     <path class="ava-shirt" d="M26 120q0-26 34-28 34 2 34 28z" fill="#2f5d8f"/>
     <circle cx="60" cy="100" r="3" fill="#24476d"/>`),
 
+  // Guddi: the one nobody beats. Ribboned braids, steady hands, and she barely looks up.
+  // Putting the final boss of a boys' street game in braids is the whole joke, and she earns it.
+  guddi: S('guddi', `
+    ${face('#e0a97a', '#c8905f')}
+    <path class="ava-hair" d="M28 50c0-20 14-30 32-30s32 10 32 30c-4-12-13-16-32-16s-28 4-32 16z" fill="#1c1210"/>
+    <path d="M28 50q-7 16-3 34 9 3 12-6 3-12-1-28z" fill="#1c1210"/>
+    <path d="M92 50q7 16 3 34-9 3-12-6-3-12 1-28z" fill="#1c1210"/>
+    <g fill="#e0453c">
+      <circle cx="33" cy="86" r="6"/><circle cx="87" cy="86" r="6"/>
+      <path d="M27 84q6-7 12 0-6 5-12 0z"/><path d="M93 84q-6-7-12 0 6 5 12 0z"/>
+    </g>
+    <path d="M45 24q15-8 30 0-15 4-30 0z" fill="#e0453c"/>
+    ${eyes(50, 4.2)}
+    <path class="ava-brow" d="M42 41q7-4 13 0M78 41q-7-4-13 0" stroke="#1c1210" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <circle cx="60" cy="41" r="2.4" fill="#c0392b"/>
+    <path class="ava-mouth" d="M51 64q9 5 18 0" stroke="#8a3a2a" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path class="ava-shirt" d="M26 120q0-26 34-28 34 2 34 28z" fill="#b8467e"/>
+    <path d="M60 92v20" stroke="#96345f" stroke-width="2.5"/>`),
+
   // Ustaad Pappu: moustache, half-shut eyes, rolls a Dhampar in his palm while he thinks.
   ustaad: S('ustaad', `
     ${face('#c98b5e', '#ad7148')}
@@ -85,6 +104,12 @@ export const palm = (n) => {
     <path d="M30 70q-9 3-8 13t13 9z" fill="#c1844f"/>
   </svg>`;
 };
+
+/** Chotu, when it has gone badly. Same face, different everything else. */
+export const CHOTU_CRYING = AVATARS.chotu
+  .replace('class="ava-chotu"', 'class="ava-chotu is-crying"')
+  .replace(/<path class="ava-mouth"[^>]*\/>/, '<path class="ava-mouth" d="M50 70q10 -9 20 0" stroke="#7a3b25" stroke-width="3.2" fill="none" stroke-linecap="round"/>')
+  + '';
 
 export function mountAvatar(el, level, state = 'idle') {
   el.innerHTML = AVATARS[level] || AVATARS.bunty;

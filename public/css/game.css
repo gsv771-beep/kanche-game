@@ -29,7 +29,10 @@ body{
 .sub{opacity:.66;font-size:14px;margin:0 0 20px}
 .lbl{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;opacity:.5;margin:22px 0 9px;font-weight:700}
 .cards{display:grid;gap:9px}
-.cards-bot{grid-template-columns:repeat(3,1fr)}
+.cards-bot{grid-template-columns:repeat(4,1fr)}
+.card.locked{opacity:.4;filter:grayscale(1)}
+.card.locked::after{content:"🔒";position:absolute;top:6px;right:8px;font-size:13px;filter:none}
+.cards-bot .card{position:relative}
 .card{
   text-align:left;background:rgba(255,255,255,.05);border:1.5px solid var(--line);
   border-radius:14px;padding:13px 14px;color:inherit;font:inherit;cursor:pointer;
@@ -139,6 +142,11 @@ body{
 .pad-go.is-arm{background:var(--green);border-color:var(--green)}
 .pad[disabled]{opacity:.35}
 .swap{width:100%;margin:8px 0 0;color:var(--chalk);opacity:.4;font:600 11.5px inherit;text-align:center}
+/* How chipped the striker is. A bar you watch, not a surprise. */
+.wear{display:block;width:34px;height:6px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden;flex:none}
+.wear i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--red));transition:width .3s}
+.wear.hot i{animation:pulse .8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 .chances{display:flex;gap:4px;align-items:center}
 .chances i{width:9px;height:9px;border-radius:50%;background:var(--gold);display:block}
 .chances i.spent{background:none;box-shadow:inset 0 0 0 1.5px rgba(243,238,226,.3)}
@@ -152,6 +160,22 @@ body{
 /* pass-the-phone curtain for hotseat, and the bot's turn banner */
 .turn-flag{position:fixed;inset:0;background:rgba(20,12,7,.92);display:flex;align-items:center;
   justify-content:center;font-size:24px;font-weight:800;z-index:9;animation:pop .2s}
+
+/* The mid-game offer. Sits above the controls, never over the board. */
+.wager{position:fixed;left:10px;right:10px;bottom:calc(200px + env(safe-area-inset-bottom));
+  background:var(--chalk);color:#2a1b10;border-radius:14px;padding:11px 12px;z-index:12;
+  display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;
+  box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .22s ease-out}
+.wager button{border:0;border-radius:9px;padding:9px 14px;font:700 13px inherit;cursor:pointer;flex:none}
+.wager-yes{background:#2a1b10;color:var(--chalk)}
+.wager-no{background:rgba(0,0,0,.12);color:#2a1b10}
+.wager span{flex:1}
+
+.cry{margin:18px 0 6px;padding:14px;border-radius:16px;background:rgba(255,255,255,.05);border:1.5px solid var(--line)}
+.cry-ava{width:88px;margin:0 auto 6px}
+.cry-ava svg{width:100%;height:auto;display:block;animation:sob 1.4s ease-in-out infinite}
+@keyframes sob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(3px) rotate(2deg)}}
+.cry-txt{font-size:14px;margin:0 0 12px;opacity:.9}
 
 /* ---------- result + modal ---------- */
 #screen-over{background:radial-gradient(120% 70% at 50% 0%,#5a3d26,var(--mud2) 70%);

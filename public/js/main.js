@@ -1,11 +1,11 @@
 // Wiring. Owns the screens, the turn loop and the playback of a settled shot.
-import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, CHANCES, TURN_SHOTS, shotsLeft, lagWinner, lineUp } from './rules.js';
+import { newMatch, applyShot, current, strikerId, strikerOf, kaliJota, CHANCES, TURN_SHOTS, shotsLeft, lagWinner, lineUp, buyStriker, NEW_STRIKER } from './rules.js';
 import { chooseShot, thinkTime, LEVELS } from './bot.js';
 import * as R from './render.js';
 import { attachInput, predictPath, firstOnLine } from './input.js';
 import * as C from './controls.js';
 import * as A from './audio.js';
-import { mountAvatar, setAvatarState, AVATARS, FIST, palm } from './avatars.js';
+import { mountAvatar, setAvatarState, AVATARS, CHOTU_CRYING, FIST, palm } from './avatars.js';
 import { say, summaryLine, eventFor } from './strings.js';
 import { rng } from './rng.js';
 import { SHOOT_LINE, dist, powerToClear, simulate } from './physics.js';
@@ -30,6 +30,8 @@ let dragging = false;
 let lagging = false; // the pre-game throw for turn order
 let lagDist = [];
 let botStreak = 0;   // consecutive scoring shots inside the opponent's current turn
+let wager = 1;       // 2 once a double-or-nothing has been taken
+let wagerDone = false;
 let play = null;          // { before, frames, events, summary, i, dinged:Set }
 let botPreview = null;    // the opponent's wandering aim line while it thinks
 const canvas = $('#board');
@@ -44,6 +46,27 @@ function sel(group, btn, fn) {
   fn(); A.unlock();
 }
 document.querySelectorAll('#pick-bot .card').forEach((b) => { b.querySelector('.ava-box').innerHTML = AVATARS[b.dataset.bot]; });
+
+// The ladder. You start against the gully kid and each one you beat opens the next -- so the
+// first thing a new player meets is someone they can actually beat, and Guddi is something you
+// arrive at rather than something you pick off a menu.
+const LADDER = ['chotu', 'bunty', 'ustaad', 'guddi'];
+const beaten = () => store.get('beaten', []);
+const unlocked = (id) => { const i = LADDER.indexOf(id); return i <= 0 || beaten().includes(LADDER[i - 1]); };
+function drawLadder() {
+  document.querySelectorAll('#pick-bot .card').forEach((b) => {
+    const ok = unlocked(b.dataset.bot);
+    b.classList.toggle('locked', !ok);
+    b.disabled = !ok;
+  });
+  if (!unlocked(pick.bot)) { pick.bot = LADDER.find((id) => unlocked(id) && !beaten().includes(id)) || 'chotu'; }
+  document.querySelectorAll('#pick-bot .card').forEach((c) => c.classList.toggle('is-sel', c.dataset.bot === pick.bot));
+  const next = LADDER.find((id) => !unlocked(id));
+  $('#ladder-note').textContent = next
+    ? `Beat ${LEVELS[LADDER[LADDER.indexOf(next) - 1]].name} to face ${LEVELS[next].name}.`
+    : 'You have faced everyone on this gully.';
+}
+drawLadder();
 $('#btn-play').onclick = () => { A.unlock(); startLag(); };
 $('#btn-again').onclick = () => startLag();
 let quitArmed = null;
@@ -54,12 +77,19 @@ $('#btn-quit').onclick = () => {
   quitArmed = setTimeout(() => { quitArmed = null; b.classList.remove('armed'); b.textContent = '✕'; }, 3000);
 };
 function toMenu() {
+  drawLadder();
   phase = 'idle'; play = null; botPreview = null; lagging = false; match = null;
   window.__match = null; bubble(null);
   show('screen-setup');
 }
 $('#btn-menu').onclick = () => toMenu();
 $('#btn-mute').onclick = () => { A.setMuted(!A.isMuted()); $('#btn-mute').textContent = A.isMuted() ? '🔇' : '🔊'; };
+$('#btn-newstriker').onclick = () => {
+  if (!match || !buyStriker(match, 0)) return;
+  $('#btn-newstriker').hidden = true;
+  msg(`Fresh striker. That cost you ${NEW_STRIKER}.`);
+  defaultAim(); hud();
+};
 $('#btn-line').onclick = () => { fromLine = true; $('#btn-line').hidden = true; msg('From the line. Your shot.'); };
 
 /* ---------------- button controls ---------------- */
@@ -164,7 +194,11 @@ function start(first = null) {
   C.cancel(ctl);
   $('#bot-name').textContent = match.players[1].name;
   mountAvatar($('#ava-wrap'), pick.bot, 'idle');
-  bubble(say(pick.bot, 'start', r, used));
+  if (pick.bot === 'chotu' && store.get('lent', false)) {
+    store.set('lent', false);
+    store.set('pocket', store.get('pocket', 0) + 4);     // three back, and one for the wait
+    bubble(say('chotu', 'payback', r, used));
+  } else bubble(say(pick.bot, 'start', r, used));
   $('#a2hs').hidden = true;      // never let the hint sit over the board
   show('screen-game');
   R.resize(); hud(); defaultAim();
@@ -235,6 +269,33 @@ function botTurn() {
   setTimeout(() => { if (phase === 'bot') { A.flick(shot.power); fire(shot); } }, wait);
 }
 
+/**
+ * Double or nothing, offered mid-match by the two who would actually dare. Once, and only when
+ * the game is half gone and still close -- an offer made when it is already decided is not a
+ * gamble, it is a formality.
+ */
+function maybeWager() {
+  if (wagerDone || wager > 1 || !match || match.phase === 'over') return;
+  const bot = match.players[1];
+  if (bot.level !== 'ustaad' && bot.level !== 'guddi') return;
+  const half = match.mode === 'pill'
+    ? Math.max(...match.players.map((p) => p.points)) >= match.target * 0.4
+    : match.pot <= match.ante * match.players.length * 0.6;
+  if (!half || Math.abs(standing()) > 1) return;
+  wagerDone = true;
+  $('#wager-txt').textContent = `${bot.name}: ${say(bot.level, 'wagerOffer', r, used)}`;
+  $('#wager').hidden = false;
+}
+$('#wager-yes').onclick = () => {
+  $('#wager').hidden = true; wager = 2;
+  bubble(say(match.players[1].level, 'wagerYes', r, used));
+  msg('Double or nothing. Everything counts twice now.');
+};
+$('#wager-no').onclick = () => {
+  $('#wager').hidden = true;
+  bubble(say(match.players[1].level, 'wagerNo', r, used));
+};
+
 /** Positive when the opponent is in front. */
 function standing() {
   const [you, bot] = match.players;
@@ -254,7 +315,7 @@ function settle() {
   const bot = match.players[1];
   const mine = sum.by === 0;
   if (sum.gained > 0) A.ding();
-  if (sum.foul) A.thud();
+  if (sum.foul || sum.shattered) A.thud();
 
   botStreak = mine ? 0 : (sum.gained > 0 ? botStreak + 1 : 0);
   // He comments on every shot now, yours included. A silent opponent is a scoreboard.
@@ -263,7 +324,8 @@ function settle() {
     mine ? (sum.gained > 0 ? 'sad' : sum.foul || sum.dirty ? 'happy' : 'idle')
          : (sum.gained > 0 ? 'happy' : sum.foul || sum.dirty ? 'sad' : 'idle'));
   // One more score and he takes it: worth saying out loud, and it beats any other line.
-  bubble(say(bot.level, onMatchPoint(1) ? 'matchPoint' : ev, r, used));
+  bubble(say(bot.level, sum.shattered ? (mine ? 'shatter' : 'botShatter')
+    : onMatchPoint(1) ? 'matchPoint' : ev, r, used));
   msg(summaryLine(sum, match.players));
   play = null; hud();
 
@@ -271,6 +333,7 @@ function settle() {
   const cur = current(match);
   if (turnChanged) botStreak = 0;
   if (cur.kind === 'bot') return setTimeout(botTurn, 650);
+  if (turnChanged) setTimeout(maybeWager, 900);
   // A word on the standings when the board changes hands, now and then.
   if (turnChanged && r.next() < 0.35) {
     const lead = standing();
@@ -298,10 +361,40 @@ function over() {
     : won ? `You walk home with ${you.won} extra goli.`
     : tie ? 'Nobody is richer. Again?' : `${bot.name} pockets ${bot.won}.`;
   pocketBase = store.get('pocket', 0);
-  if (won) store.set('wins', store.get('wins', 0) + 1);
+  if (won) {
+    store.set('wins', store.get('wins', 0) + 1);
+    const b = beaten(); if (!b.includes(pick.bot)) store.set('beaten', b.concat(pick.bot));
+  }
+  if (wager > 1) $('#over-quote').textContent = say(bot.level, won ? 'wagerLose' : 'wagerWin', r, used);
   tally();
+  cryPanel(won, you, bot);
   show('screen-over');
 }
+
+/**
+ * Chotu is nine and has just lost the lot. He does not take it well, and the marbles were not
+ * really his to lose. Lending is a straight cost to you -- he pays back four next time, which is
+ * the point: the only character who can owe you anything is the one who would.
+ */
+function cryPanel(won, you, bot) {
+  const box = $('#cry');
+  const badly = won && (you.won - bot.won >= 4 || bot.stash <= 2);
+  if (!(pick.bot === 'chotu' && badly && !store.get('lent', false))) { box.hidden = true; return; }
+  box.hidden = false;
+  $('#cry-ava').innerHTML = CHOTU_CRYING;
+  $('#cry-txt').textContent = say('chotu', 'cry', r, used);
+}
+$('#cry-lend').onclick = () => {
+  store.set('lent', true);
+  store.set('pocket', store.get('pocket', 0) - 3);
+  $('#cry-txt').textContent = say('chotu', 'lendYes', r, used);
+  $('#cry-lend').disabled = true; $('#cry-no').disabled = true;
+  tally();
+};
+$('#cry-no').onclick = () => {
+  $('#cry-txt').textContent = say('chotu', 'lendNo', r, used);
+  $('#cry-lend').disabled = true; $('#cry-no').disabled = true;
+};
 
 /** This match's net for each side, plus the running pocket -- the only number that carries. */
 function tally() {
@@ -311,7 +404,7 @@ function tally() {
     return;
   }
   const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
-  const pocket = pocketBase + you.won;
+  const pocket = pocketBase + you.won * wager;
   store.set('pocket', pocket);
   $('#tally').innerHTML =
     `<div><b>${sign(you.won)}</b>you, this match</div>` +
@@ -429,6 +522,16 @@ function hud() {
   $('#pot').textContent = lagging ? '·'
     : pill ? (match.players[0].needsHole ? 'HOLE' : match.players[0].points >= match.target ? 'SINK' : '—')
     : match.pot;
+  // How chipped your striker is, and the chance to swap before it gives out.
+  const me = strikerOf(match, 0);
+  const w = $('#wear');
+  if (!lagging && me && me.fragile > 0 && me.wear > 0.08) {
+    w.hidden = false; w.classList.toggle('hot', me.wear > 0.7);
+    w.firstElementChild.style.width = `${Math.min(100, me.wear * 100).toFixed(0)}%`;
+  } else w.hidden = true;
+  $('#btn-newstriker').hidden = !(!lagging && me && me.wear > 0.55 && myTurn()
+    && match.players[0].stash > NEW_STRIKER);
+
   const ch = $('#chances');
   if (lagging) { ch.innerHTML = ''; return; }
   const left = shotsLeft(match);

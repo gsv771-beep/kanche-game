@@ -101,6 +101,24 @@ function drawMarble(x, y, rm, skin, opts = {}) {
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
   ctx.beginPath(); ctx.ellipse(px - pr * 0.33, py - pr * 0.36, pr * 0.26, pr * 0.19, -0.6, 0, 7); ctx.fill();
 
+  if (opts.wear > 0.12) {
+    // Cracks, drawn from the wear number itself. The whole point of wear being a counter rather
+    // than a dice roll is that you can see it coming, so it has to be on the marble.
+    ctx.save();
+    ctx.beginPath(); ctx.arc(px, py, pr * 0.97, 0, 7); ctx.clip();
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 + opts.wear * 0.5})`;
+    ctx.lineWidth = Math.max(0.8, pr * 0.07);
+    const n = Math.min(5, 1 + Math.floor(opts.wear * 5));
+    for (let i = 0; i < n; i++) {
+      const a = (i * 2.399) % (Math.PI * 2), len = pr * (0.5 + 0.5 * opts.wear);
+      ctx.beginPath();
+      ctx.moveTo(px + Math.cos(a) * pr * 0.1, py + Math.sin(a) * pr * 0.1);
+      ctx.lineTo(px + Math.cos(a + 0.35) * len, py + Math.sin(a + 0.35) * len);
+      ctx.lineTo(px + Math.cos(a - 0.1) * pr, py + Math.sin(a - 0.1) * pr);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   if (opts.ring) {   // whose striker this is
     ctx.strokeStyle = opts.ring; ctx.lineWidth = Math.max(1.6, pr * 0.16);
     ctx.beginPath(); ctx.arc(px, py, pr + ctx.lineWidth, 0, 7); ctx.stroke();
@@ -182,7 +200,7 @@ export function draw(view) {
   for (const p of view.positions) {
     if (p.hidden) continue;
     drawMarble(p.x, p.y, p.r, p.skin, {
-      alpha: p.alpha, mark: p.mark,
+      alpha: p.alpha, mark: p.mark, wear: p.wear || 0,
       ring: p.striker ? PLAYER_COLORS[p.owner % PLAYER_COLORS.length] : null,
     });
   }

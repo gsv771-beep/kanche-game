@@ -15,6 +15,9 @@ export const LEVELS = {
   chotu:  { id: 'chotu',  name: 'Chotu',        tier: 'Gully kid',     sd: 6.0 * D2R, psd: 0.24, rollouts: 8,  top: 1, sloppy: true,  position: false, think: [900, 1700] },
   bunty:  { id: 'bunty',  name: 'Bunty',        tier: 'Mohalla champ', sd: 2.0 * D2R, psd: 0.10, rollouts: 36, top: 3, sloppy: false, position: true,  think: [1200, 2200] },
   ustaad: { id: 'ustaad', name: 'Ustaad Pappu', tier: 'Ustaad',        sd: 0.5 * D2R, psd: 0.035, rollouts: 56, top: 4, sloppy: false, position: true,  think: [1500, 2600] },
+  // The one above the ustaad. Still beatable: her hands are steadier, not magic, and the
+  // clean-hit rule scatters even her -- she simply does it about once in fifty shots.
+  guddi:  { id: 'guddi',  name: 'Guddi',        tier: 'Gully ki rani', sd: 0.22 * D2R, psd: 0.018, rollouts: 84, top: 5, sloppy: false, position: true,  deep: true, think: [1700, 2900] },
 };
 
 /** Ghost-ball: to send `target` along `ex,ey`, the striker must arrive at this contact point. */
@@ -104,6 +107,15 @@ function value(match, pid, res, lvl) {
     const s = res.marbles.find((x) => x.id === strikerId(pid));
     const left = res.marbles.filter((x) => !x.striker && !x.out && !ev.knockedOut.includes(x.id));
     if (left.length && s) v += Math.max(0, 3 - Math.min(...left.map((t) => dist(s.x, s.y, t.x, t.y))) * 5);
+  }
+  if (lvl.deep && ev.knockedOut.length) {
+    // Two-ply, and the thing that actually separates the top of the ladder. Steadier hands buy
+    // almost nothing past the ustaad's half a degree -- measured, halving it again moved the
+    // head-to-head by a couple of games. Asking "and what does that leave me?" is what a great
+    // player does: run the ghost-ball arithmetic on the SETTLED board and reward a shot that
+    // leaves a fat, cheap next one. Costs no extra simulation.
+    const after = candidates({ ...match, marbles: res.marbles }, pid);
+    if (after.length) v += 5 * Math.max(...after.map((c) => Math.cos(c.cut) * (1 - c.power)));
   }
   return v;
 }

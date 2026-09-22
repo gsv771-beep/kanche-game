@@ -408,7 +408,7 @@ const board = () => [
 // ---------- the opponent's mouth ----------
 {
   const chars = allLines();
-  ok('all three characters have their own lines', chars.length === 3 && chars.every(([, l]) => l.length > 30),
+  ok('every character on the ladder has their own lines', chars.length === 4 && chars.every(([, l]) => l.length > 40),
     chars.map(([k, l]) => `${k}:${l.length}`).join(' '));
   ok('nobody shares a line with anybody else', (() => {
     const all = chars.flatMap(([, l]) => l);
@@ -419,10 +419,12 @@ const board = () => [
   // pool means the opponent silently says nothing at the exact moment he should be talking.
   const events = ['start', 'lagWin', 'lagLose', 'botScore', 'botBig', 'botMiss', 'botFoul',
                   'botDirty', 'botRun', 'youScore', 'youBig', 'youMiss', 'youNear', 'youFoul',
-                  'youDirty', 'youOut', 'ahead', 'behind', 'matchPoint', 'win', 'lose'];
+                  'youDirty', 'youOut', 'ahead', 'behind', 'matchPoint', 'win', 'lose',
+                  'shatter', 'botShatter', 'wagerOffer', 'wagerYes', 'wagerNo', 'wagerWin',
+                  'wagerLose', 'cry', 'lendYes', 'lendNo', 'payback', 'jotaMix', 'jotaRight', 'jotaWrong'];
   const r2 = rng(5);
   const gaps = [];
-  for (const lvl of ['chotu', 'bunty', 'ustaad']) for (const e of events) {
+  for (const lvl of ['chotu', 'bunty', 'ustaad', 'guddi']) for (const e of events) {
     if (!say(lvl, e, r2, new Set())) gaps.push(`${lvl}.${e}`);
   }
   ok('every event has a line in every voice', gaps.length === 0, gaps.join(', '));

@@ -26,9 +26,24 @@ export const PILL_R = 0.030;         // the small hole dug for Pill Chot
 // big one keeps rolling once moving -- but it still cannot reach as far, and being fat and slow
 // it parks inside the ring far more often, which is a lost marble under the foul rule.
 export const STRIKERS = {
-  goli:    { id: 'goli',    label: 'Goli',    r: 0.0140, mass: 1.00, maxSpeed: 5.60, decel: 5.20 },
-  dhampar: { id: 'dhampar', label: 'Dhampar', r: 0.0190, mass: 2.48, maxSpeed: 3.55, decel: 3.84 },
+  goli:    { id: 'goli',    label: 'Goli',    r: 0.0140, mass: 1.00, maxSpeed: 5.60, decel: 5.20, fragile: 1.00 },
+  // Glass is glass -- the big one is no tougher. It simply hits slower, and wear goes as the
+  // square of the impact, so it lasts far longer without needing a special case.
+  dhampar: { id: 'dhampar', label: 'Dhampar', r: 0.0190, mass: 2.48, maxSpeed: 3.55, decel: 3.84, fragile: 1.00 },
+  // A ball bearing off a scooter wheel. Heavy, unstoppable, and it will never crack -- but it
+  // is dead weight to flick and it costs more to bring to the field.
+  steel:   { id: 'steel',   label: 'Steel',   r: 0.0125, mass: 3.20, maxSpeed: 3.10, decel: 3.30, fragile: 0.00 },
 };
+
+/**
+ * Glass wears out. Every hard contact chips a striker, and past its limit it shatters.
+ *
+ * Deliberately a counter you can watch rather than a dice roll: random misfortune is the thing
+ * that makes a game feel like it is cheating. The crack is drawn on the marble and the number is
+ * in the HUD, so losing a striker is always something you saw coming and chose to risk.
+ */
+const WEAR_FLOOR = 1.1;      // gentle taps do nothing at all
+const WEAR_SCALE = 0.013;    // tuned so a goli survives roughly a dozen firm hits
 export const POT_MARBLE = { r: 0.0140, mass: 1.00, decel: 5.20 };
 
 /**
@@ -90,6 +105,7 @@ export function marble(id, x, y, opts = {}) {
     // reads marble.decel -- the aim assist, the power guidance, the bot's arithmetic -- accounts
     // for the ground without knowing the ground exists.
     r: spec.r, mass: spec.mass, decel: spec.decel * (opts.friction ?? 1),
+    fragile: spec.fragile ?? 0, wear: opts.wear ?? 0,
     striker: opts.striker || null,
     owner: opts.owner ?? null,
     skin: opts.skin || 'kanch',
@@ -144,7 +160,7 @@ export function simulate(marbles, shot, opts = {}) {
   // striker met first -- a marble knocked into its neighbour has touched two, and under the
   // clean-hit rule that ends the turn.
   const events = { firstContact: null, knockedOut: [], pilled: [], impacts: [], touched: [],
-                   strikerInRing: false, settledAt: 0, inMud: false };
+                   strikerInRing: false, settledAt: 0, inMud: false, wear: 0, shattered: false };
   const mud = opts.mud || [];
   const frames = [];
   const snap = () => { const f = new Float32Array(m.length * 2); m.forEach((x, i) => { f[i * 2] = x.x; f[i * 2 + 1] = x.y; }); frames.push(f); };
@@ -178,6 +194,12 @@ export function simulate(marbles, shot, opts = {}) {
           const hit = collide(m[i], m[j]);
           if (hit > 0.05) {
             events.impacts.push({ t, speed: hit, frame: frames.length });
+            if ((m[i].id === shot.id || m[j].id === shot.id) && hit > WEAR_FLOOR) {
+              // chips go as the square of the impact: a firm chot costs far more than a nudge
+              const add = (hit - WEAR_FLOOR) ** 2 * WEAR_SCALE * shooter.fragile;
+              shooter.wear = Math.min(1.4, shooter.wear + add);
+              events.wear += add;
+            }
             for (const q of [m[i], m[j]]) if (!q.striker && !events.touched.includes(q.id)) events.touched.push(q.id);
             if (!events.firstContact && (m[i].id === shot.id || m[j].id === shot.id)) {
               events.firstContact = m[i].id === shot.id ? m[j].id : m[i].id;
@@ -198,6 +220,7 @@ export function simulate(marbles, shot, opts = {}) {
   }
 
   events.settledAt = t;
+  events.shattered = shooter.wear >= 1;
   // The striker resting inside the circle is a foul -- it is now just another marble in the pot.
   events.strikerInRing = !usePill && dist(shooter.x, shooter.y, 0, 0) <= ringR + shooter.r;
   for (const a of m) { a.resting = true; a.vx = a.vy = 0; }

@@ -153,14 +153,24 @@ Its brain **is the physics engine**. Three stages:
 Stage 3 is the trick. A shaky bot avoids thin cuts entirely on its own, because in its rollouts
 the thin cut fails — which is exactly why a beginner plays safe. Nobody programmed that.
 
-Difficulty is therefore never a cheat. Every tier runs identical code and differs in three
-honest numbers:
+Difficulty is therefore never a cheat. Every tier runs identical code and differs in honest
+numbers:
 
-| | angular σ | power σ | rollouts | thinks about position? |
+| | angular σ | power σ | rollouts | thinks about |
 |---|---|---|---|---|
-| **Chotu** (Gully kid) | 6.0° | 24% | 8 | no — grabs a shot off the top of the pile |
-| **Bunty** (Mohalla champ) | 2.0° | 10% | 36 | yes |
-| **Ustaad Pappu** | 0.5° | 3.5% | 56 | yes, plus take-the-line |
+| **Chotu** (Gully kid) | 6.0° | 24% | 8 | nothing — grabs a shot off the top of the pile |
+| **Bunty** (Mohalla champ) | 2.0° | 10% | 36 | striker safety |
+| **Ustaad Pappu** | 0.5° | 3.5% | 56 | ...plus position and taking the line |
+| **Guddi** (Gully ki rani) | 0.22° | 1.8% | 84 | ...plus what the shot *leaves her* |
+
+Guddi is the one above the ustaad, and steadier hands are not what makes her better. Halving an
+already-tiny error is worth almost nothing — measured, it moved the head-to-head by two games in
+twenty. What separates the top of the ladder is **two-ply**: she runs the ghost-ball arithmetic
+on the settled board and prefers a shot that leaves her a fat, cheap next one. That took her from
+50% against the ustaad to 56%, and from 80% against Bunty to 88%, while staying beatable — the
+clean-hit rule scatters even her.
+
+They are a **ladder**: you start against Chotu and each one you beat opens the next.
 
 Measured over 24 matches per pairing: Ustaad beats Chotu 20/24, Bunty beats Chotu 20/24, Ustaad
 beats Bunty 14/24. Every match terminates.
@@ -196,6 +206,26 @@ nothing ever rests outside it, so the two cannot diverge again.
 
 Widening it is safe in both axes because the camera fits by `min(W/width, H/height)`, so the
 visible extent is always at least the field.
+
+## Glass breaks
+
+Every hard contact chips a striker, as the square of the impact, and past its limit it shatters.
+A replacement costs a marble; with nothing left to buy one, you are out — which is the real
+street ending rather than a scoreboard.
+
+| striker | firm chots (power 0.85) | gentle ones (0.55) |
+|---|---|---|
+| Goli | 9 | 92 |
+| Dhampar | 57 | never in practice |
+| Steel | never | never |
+
+The Dhampar needs no special case: glass is glass, it simply hits slower and wear goes as the
+square. Steel never cracks but is dead weight to flick.
+
+This is a **counter you can watch**, never a dice roll — the cracks are drawn on the marble and
+the wear bar is in the HUD, and you can buy a fresh striker before it gives out. Random
+misfortune is the thing that makes a game feel like it is cheating; a resource you are spending
+by choosing to hit hard is a decision.
 
 ## The ground
 
