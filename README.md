@@ -227,6 +227,17 @@ the wear bar is in the HUD, and you can buy a fresh striker before it gives out.
 misfortune is the thing that makes a game feel like it is cheating; a resource you are spending
 by choosing to hit hard is a decision.
 
+## The hand
+
+Shots played off the ground are flicked by a hand drawn from above, the way the board is: palm
+behind the marble, thumb pressed flat to one side — which is the actual rule, the thumb has to
+stay down — and the forefinger drawn back and snapped through.
+
+In Chakri the opening shot is still a **throw** from the line, exactly as it is in the street,
+and every shot after it is played off the dirt where the striker lies. In Pill Chot you are
+always down on the ground. The lag is a throw. The board holds still for the 210ms of the flick,
+so the shot reads as something the hand did rather than a caption on it.
+
 ## The ground
 
 Three surfaces, and the difference is real rather than decorative — the same flick travels a

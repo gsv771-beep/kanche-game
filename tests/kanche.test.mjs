@@ -498,5 +498,31 @@ const board = () => [
   }
 }
 
+// ---------- the hole lets go ----------
+{
+  // Reported: the marble goes in and never comes back. The capture test fires on anything inside
+  // the pill moving slower than a walking pace -- and a marble that STARTS in the pill is, on
+  // its first step, exactly that. A gentle shot was swallowed again 3mm from home, and every
+  // chance in the turn went the same way.
+  const out = (pw) => {
+    const ms = [marble('s0', 0, 0, { striker: 'goli' })];
+    ms[0].inPill = true;
+    const res = simulate(ms, { id: 's0', angle: -Math.PI / 2, power: pw }, { ringR: RING_R, pill: true });
+    return res.marbles[0];
+  };
+  for (const pw of [0.08, 0.15, 0.3, 0.7]) {
+    const m = out(pw);
+    ok(`a shot at ${pw} power gets the striker out of the hole`, !m.inPill && Math.hypot(m.x, m.y) > 0.01,
+      `travelled ${Math.hypot(m.x, m.y).toFixed(3)}m`);
+  }
+  // ...and it must still swallow one arriving from outside, or the mode has no target
+  let caught = 0;
+  for (const pw of [0.36, 0.38, 0.40, 0.42]) {
+    const ms = [marble('s0', 0, 0.40, { striker: 'goli' })];
+    if (simulate(ms, { id: 's0', angle: -Math.PI / 2, power: pw }, { ringR: RING_R, pill: true }).marbles[0].inPill) caught++;
+  }
+  ok('the hole still catches a marble arriving from outside', caught >= 3, `${caught} of 4 powers landed`);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll Kanche tests passed');
 process.exit(failures ? 1 : 0);

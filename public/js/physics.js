@@ -150,6 +150,14 @@ export function simulate(marbles, shot, opts = {}) {
 
   // A marble resting in the pill is frozen by the loop below, so shooting it out has to lift it
   // first. This is what lets the hole work as a staging post rather than a trap.
+  //
+  // Lifting it is not enough on its own. The capture test fires on any marble inside the pill
+  // moving slower than a walking pace -- and a marble that STARTS in the pill is, on its first
+  // step, exactly that. A gentle shot was swallowed again 3mm from home and every chance in the
+  // turn went the same way. So a striker that began in the hole cannot be recaptured until it
+  // has actually cleared the rim.
+  const startedInPill = shooter.inPill;
+  let leftPill = !startedInPill;
   shooter.inPill = false;
   const spec = STRIKERS[shooter.striker] || POT_MARBLE;
   const speed = Math.max(0, Math.min(1, shot.power)) * (spec.maxSpeed ?? 5.6);
@@ -210,7 +218,9 @@ export function simulate(marbles, shot, opts = {}) {
       for (const a of m) {
         // "fully outside the line" is the street rule, not centre-out
         if (!a.out && dist(a.x, a.y, 0, 0) > ringR + a.r) { a.out = true; if (!a.striker) events.knockedOut.push(a.id); }
-        if (usePill && !a.inPill && dist(a.x, a.y, 0, 0) < PILL_R && Math.hypot(a.vx, a.vy) < 1.25) {
+        if (a.id === shot.id && !leftPill && dist(a.x, a.y, 0, 0) > PILL_R + a.r) leftPill = true;
+        if (usePill && !a.inPill && (a.id !== shot.id || leftPill)
+            && dist(a.x, a.y, 0, 0) < PILL_R && Math.hypot(a.vx, a.vy) < 1.25) {
           a.inPill = true; a.vx = a.vy = 0; events.pilled.push(a.id);
         }
       }

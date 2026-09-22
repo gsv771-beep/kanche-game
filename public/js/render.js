@@ -130,7 +130,68 @@ function drawMarble(x, y, rm, skin, opts = {}) {
   ctx.restore();
 }
 
-/** @param view { match, positions, aim, ghosts } */
+/**
+ * The hand, seen from above, the way the board is. Knuckles behind the marble, the thumb pressed
+ * flat on the ground to one side -- which is the actual rule, the thumb must stay down -- and the
+ * forefinger drawn back and snapped forward. `t` runs 0..1 through a flick; null is the hand
+ * resting in position while you aim.
+ */
+function drawHand(hx, hy, angle, t) {
+  const px = sx(hx), py = sy(hy), r = 0.014 * scale;
+  // A real hand dwarfs a marble -- roughly thirteen to one. Drawn to that ratio it would swallow
+  // the board, so the hand is built on `u` while the fingertip stays anchored in marble radii,
+  // which keeps the contact point honest whatever size the rest of it is.
+  const u = r * 1.45;
+  const fx = Math.cos(angle), fy = Math.sin(angle);
+  const ux = -fy, uy = fx;                       // across the hand
+  // the forefinger: back on the first half of the flick, then through the marble on the second
+  const pull = t === null ? r * 0.30
+    : t < 0.45 ? r * (0.30 + 1.5 * (t / 0.45))
+    : r * (1.8 - 2.6 * ((t - 0.45) / 0.55));
+  const at = (f, u) => [px + fx * f + ux * u, py + fy * f + uy * u];
+  const blob = (f, u, rf, ru, rot, fill) => {
+    const [x, y] = at(f, u);
+    ctx.fillStyle = fill; ctx.beginPath();
+    ctx.ellipse(x, y, rf, ru, angle + rot, 0, 7); ctx.fill();
+  };
+
+  ctx.save();
+  // the shadow it casts on the dirt, offset the way everything else here is lit
+  ctx.globalAlpha = 0.30; ctx.fillStyle = '#140c06';
+  blob(-u * 4.0 + u * 0.3, u * 0.5, u * 3.0, u * 2.3, 0, '#140c06');
+  ctx.globalAlpha = 1;
+
+  // two folded fingers tucked beside the palm
+  blob(-u * 3.2, -u * 1.9, u * 2.0, u * 0.75, 0, '#c1844f');
+  blob(-u * 3.4, -u * 0.7, u * 2.2, u * 0.75, 0, '#cf9159');
+  // the palm
+  blob(-u * 4.3, u * 0.1, u * 2.9, u * 2.1, 0, '#d99a68');
+  // the thumb, flat on the ground and anchored -- it does not move with the flick
+  ctx.fillStyle = '#c98b5e';
+  ctx.beginPath();
+  const [tx0, ty0] = at(-u * 4.6, u * 1.2), [tx1, ty1] = at(-u * 0.6, u * 3.0);
+  ctx.moveTo(tx0, ty0);
+  ctx.quadraticCurveTo(...at(-u * 2.2, u * 3.2), tx1, ty1);
+  ctx.quadraticCurveTo(...at(-u * 2.6, u * 1.4), tx0, ty0);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(90,55,25,0.35)';
+  ctx.beginPath(); ctx.ellipse(tx1, ty1, u * 0.55, u * 0.4, angle, 0, 7); ctx.fill();
+
+  // the forefinger
+  const tipF = -r * 1.05 - pull;
+  ctx.strokeStyle = '#e0a86f'; ctx.lineCap = 'round';
+  ctx.lineWidth = u * 1.35;
+  ctx.beginPath();
+  ctx.moveTo(...at(-u * 4.0, -u * 0.5)); ctx.lineTo(...at(tipF, -r * 0.15)); ctx.stroke();
+  ctx.lineWidth = u * 0.9; ctx.strokeStyle = '#eab27d';
+  ctx.beginPath();
+  ctx.moveTo(...at(-u * 2.6, -u * 0.4)); ctx.lineTo(...at(tipF, -r * 0.15)); ctx.stroke();
+  // nail
+  blob(tipF - u * 0.15, -u * 0.15, u * 0.4, u * 0.3, 0, '#f6d3ab');
+  ctx.restore();
+}
+
+/** @param view { match, positions, aim, hand } */
 export function draw(view) {
   const sid = view.match.surface?.id || 'maidan';
   if (!ground || groundFor !== sid) { ground = buildGround(view.match.surface); groundFor = sid; }
@@ -205,6 +266,7 @@ export function draw(view) {
     });
   }
 
+  if (view.hand) drawHand(view.hand.x, view.hand.y, view.hand.angle, view.hand.t);
   if (view.aim && !view.aim.preview) drawAim(view.aim);
 }
 

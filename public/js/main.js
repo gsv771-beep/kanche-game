@@ -30,6 +30,8 @@ let dragging = false;
 let lagging = false; // the pre-game throw for turn order
 let lagDist = [];
 let botStreak = 0;   // consecutive scoring shots inside the opponent's current turn
+let flick = null;    // the hand mid-flick, between the release and the marble moving
+const FLICK_MS = 210;
 let wager = 1;       // 2 once a double-or-nothing has been taken
 let wagerDone = false;
 let play = null;          // { before, frames, events, summary, i, dinged:Set }
@@ -148,7 +150,7 @@ function lagFire(shot) {
   match.marbles = res.marbles;
   const me = match.marbles.find((x) => x.id === id);
   lagDist[match.turn] = Math.hypot(me.x, me.y);
-  play = { frames: res.frames, events: res.events, before, i: 0, t: 0, dinged: new Set(),
+  play = { frames: res.frames, events: res.events, before, i: 0, t: 0, dinged: new Set(), hold: 0,
            summary: { by: match.turn, lag: true } };
 }
 
@@ -249,11 +251,17 @@ attachInput(canvas, {
 
 function fire(shot) {
   if (lagging) return lagFire(shot);
+  // The flick lands before the marble moves, so the shot reads as a cause rather than a caption.
+  const who = match.turn;
+  if (handShot(who)) {
+    const s = strikerOf(match, who);
+    flick = { t0: performance.now(), x: s.x, y: s.y, angle: shot.angle };
+  }
   phase = 'anim';
   botPreview = null;
   $('#btn-line').hidden = true;
   const out = applyShot(match, shot);
-  play = { ...out, i: 0, t: 0, dinged: new Set() };
+  play = { ...out, i: 0, t: 0, dinged: new Set(), hold: flick ? FLICK_MS : 0 };
 }
 
 /* ---------------- bot ---------------- */
@@ -295,6 +303,18 @@ $('#wager-no').onclick = () => {
   $('#wager').hidden = true;
   bubble(say(match.players[1].level, 'wagerNo', r, used));
 };
+
+/**
+ * Is this shot flicked by hand, or thrown? In Chakri the opening shot is a throw from the line,
+ * exactly as it is in the street, and everything after it is played off the ground where the
+ * striker lies. In Pill Chot you are always down on the dirt. The lag is a throw.
+ */
+function handShot(pid) {
+  if (lagging || !match) return false;
+  if (match.mode === 'pill') return true;
+  const s = strikerOf(match, pid);
+  return Math.abs(s.y - SHOOT_LINE) > 0.02;
+}
 
 /** Positive when the opponent is in front. */
 function standing() {
@@ -464,9 +484,13 @@ function frame(now) {
     let positions, a = null;
 
     if (play) {
+      // Hold the board still for the length of the flick, so the hand is seen to do it.
+      // `hold` is absent on a lag throw, and `undefined <= 0` is false -- which froze playback
+      // forever and the lag never resolved. Coerce rather than trust the shape.
+      play.hold = (play.hold || 0) - dt * 1000;
       // Replay the settled shot at 60fps regardless of the display's refresh rate. A 120Hz
       // ProMotion phone and a 30Hz Low Power Mode phone must show the same shot.
-      play.t += dt * 60;
+      if (play.hold <= 0) play.t += dt * 60;
       play.i = Math.min(play.frames.length - 1, Math.floor(play.t));
       const f = play.frames[play.i];
       positions = play.before.map((m, k) => ({ ...m, x: f[k * 2], y: f[k * 2 + 1] }));
@@ -500,7 +524,18 @@ function frame(now) {
     if (held && myTurn()) C.sweep(ctl, held, dt);
     C.tick(ctl, now);
     meter();
-    R.draw({ match, positions, aim: a });
+
+    // The hand: resting in place while you line the shot up, then flicking on release.
+    let hand = null;
+    if (flick) {
+      const u = (now - flick.t0) / FLICK_MS;
+      if (u >= 1) flick = null;
+      else hand = { x: flick.x, y: flick.y, angle: flick.angle, t: u };
+    } else if (!play && myTurn() && handShot(0)) {
+      const o = originFor(0);
+      hand = { x: o.x, y: o.y, angle: ctl.angle, t: null };
+    }
+    R.draw({ match, positions, aim: a, hand });
   }
   requestAnimationFrame(frame);
 }
