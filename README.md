@@ -9,6 +9,12 @@ npm test        # physics, rules and the bot ladder
 npm run deploy  # wrangler deploy -- uploads public/ as a static-assets Worker
 ```
 
+Pushes to `main` deploy themselves: Cloudflare Workers Builds watches the repository and runs
+`npx wrangler deploy`, with no build step in between. If a push ever stops deploying, check that
+the **Cloudflare GitHub App** still lists this repository under *Repository access* — an
+installation scoped to selected repositories does not pick up new ones, and the symptom is
+silent: correct settings in the dashboard, and no check of any kind on the commit.
+
 `public/` **is** the site. There is no build step, no bundler and no dependencies -- Cloudflare
 Pages (or any static host, or a USB stick) serves it as-is.
 
